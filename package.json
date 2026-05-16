@@ -1,0 +1,35 @@
+{
+  "name": "degiro-importer-addon",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "DeGiro account statement importer for Wealthfolio",
+  "author": "shuisman",
+  "license": "MIT",
+  "keywords": ["wealthfolio", "degiro", "importer", "addon", "finance"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shuisman/degiro-importer.git"
+  },
+  "homepage": "https://github.com/shuisman/degiro-importer#readme",
+  "scripts": {
+    "dev": "vite build --watch",
+    "build": "tsc --noEmit && vite build",
+    "bundle": "npm run build && node bundle.mjs"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "rollup-plugin-external-globals": "^0.13.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "dependencies": {
+    "@wealthfolio/addon-sdk": "^3.3.0"
+  }
+}

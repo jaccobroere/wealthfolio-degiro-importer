@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.zip
+
+# Local test data — never commit personal financial exports
+Account*.csv
+
+# Wealthfolio source reference (local dev only)
+context/
+
+# Claude Code local config
+.claude/
