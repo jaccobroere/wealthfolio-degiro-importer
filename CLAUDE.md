@@ -48,9 +48,18 @@ Install in Wealthfolio: Settings → Addons → Install from file → select zip
 
 ### Use `saveMany`, NOT `activities.import()`
 
-`api.activities.import()` always returns `success=false` from the addon sandbox
-for unknown reasons. Use `api.activities.saveMany({ creates: ActivityCreate[] })`
-instead. It returns `{ created: Activity[], errors: ActivityBulkMutationError[] }`.
+`api.activities.import()` runs pre-insert validation that requires `quoteCcy`
+**and** `instrumentType` on every asset-linked row (BUY/SELL/DIVIDEND — any row
+with a symbol but no `assetId`). If either field is missing the row is marked
+invalid and the whole run reports `success=false` with per-row errors. Because
+DeGiro's CSV contains no `instrumentType` data, we can't satisfy those
+requirements. Use `api.activities.saveMany({ creates: ActivityCreate[] })` instead
+— it uses a different code path (`prepare_activities_for_save →
+resolve_import_asset_inputs`) that resolves both fields automatically by hitting
+the asset service. It returns `{ created: Activity[], errors: ActivityBulkMutationError[] }`.
+
+The SDK owner has acknowledged the inconsistency and plans to converge the two
+code paths in a future release. Keep using `saveMany` until then.
 
 ### `ActivityCreate` requirements (hard-won)
 

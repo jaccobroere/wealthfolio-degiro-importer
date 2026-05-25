@@ -206,6 +206,7 @@ function processOrderGroup(rows: DeGiroRow[]): ActivityImport[] {
 
   result.push(makeActivity({
     date:         toIsoDate(firstTrade.date, firstTrade.time),
+    isin:         isin || undefined,
     symbol,
     symbolName:   product || undefined,
     quantity:     totalQty,
@@ -226,6 +227,7 @@ function processOrderGroup(rows: DeGiroRow[]): ActivityImport[] {
 
     result.push(makeActivity({
       date:         toIsoDate(taxRow.date, taxRow.time),
+      isin:         taxRow.isin || undefined,
       symbol:       taxRow.isin || taxRow.product || cashSymbol(taxRow.mutatieCurrency || 'EUR'),
       symbolName:   taxRow.product || undefined,
       quantity:     1,
@@ -272,7 +274,7 @@ function processStandaloneRow(row: DeGiroRow): ActivityImport | null {
       const symbol = row.isin || row.product;
       if (!symbol) return null;
       return makeActivity({
-        date, symbol, symbolName: row.product || undefined, quantity: 1,
+        date, isin: row.isin || undefined, symbol, symbolName: row.product || undefined, quantity: 1,
         activityType: 'DIVIDEND', unitPrice: absAmt, currency, fee: 0, amount: absAmt,
         isValid: !!row.isin,
         errors:  row.isin ? {} : { symbol: ['No ISIN — set symbol manually'] },
@@ -301,8 +303,9 @@ function processStandaloneRow(row: DeGiroRow): ActivityImport | null {
       if (rawAmt >= 0) return null;
       return makeActivity({
         date,
-        symbol:     row.isin || row.product || cashSymbol(currency),
-        symbolName: row.product || undefined,
+        isin:         row.isin || undefined,
+        symbol:       row.isin || row.product || cashSymbol(currency),
+        symbolName:   row.product || undefined,
         quantity:     1,
         activityType: 'TAX',
         unitPrice:    absAmt,
