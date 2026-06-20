@@ -1,7 +1,7 @@
 {
   "id": "degiro-importer",
   "name": "DeGiro Importer",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "sdkVersion": "3.3.0",
   "description": "Import account statements from DeGiro broker. Supports buys, sells, dividends, deposits, withdrawals, fees and taxes.",
   "author": "shuisman",
