@@ -20,6 +20,8 @@ export default function ImporterPage({ api }: Props) {
   const [accounts, setAccounts]         = useState<Account[]>([]);
   const [accountId, setAccountId]       = useState('');
   const [clearFirst, setClearFirst]     = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearConfirmInput, setClearConfirmInput] = useState('');
   const [result, setResult]             = useState<ImportActivitiesSummary | null>(null);
   const [error, setError]               = useState<string | null>(null);
 
@@ -270,7 +272,14 @@ export default function ImporterPage({ api }: Props) {
           </button>
 
           <button
-            onClick={handleImport}
+            onClick={() => {
+              if (clearFirst) {
+                setClearConfirmInput('');
+                setShowClearConfirm(true);
+              } else {
+                handleImport();
+              }
+            }}
             disabled={stage === 'importing' || !accountId || accounts.length === 0}
             className="rounded-lg bg-primary text-primary-foreground px-4 py-1.5 text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
@@ -287,6 +296,46 @@ export default function ImporterPage({ api }: Props) {
       <div className="flex-1 overflow-auto">
         <ActivityTable activities={activities} onChange={setActivities} />
       </div>
+
+      {/* ── Clear-account confirmation dialog ── */}
+      {showClearConfirm && (() => {
+        const accountName = accounts.find(a => a.id === accountId)?.name ?? '';
+        const confirmed = clearConfirmInput.trim() === accountName;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-background rounded-xl border shadow-xl p-6 max-w-md w-full mx-4">
+              <h2 className="text-lg font-bold mb-2 text-destructive">Delete all activities?</h2>
+              <p className="text-sm text-muted-foreground mb-4">
+                All existing activities in <strong>{accountName}</strong> will be permanently
+                deleted before import. Type the account name to confirm.
+              </p>
+              <input
+                autoFocus
+                className="w-full rounded border bg-background px-3 py-2 text-sm font-mono mb-4 focus:outline-none focus:ring-2 focus:ring-destructive"
+                placeholder={accountName}
+                value={clearConfirmInput}
+                onChange={e => setClearConfirmInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && confirmed) { setShowClearConfirm(false); handleImport(); } }}
+              />
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowClearConfirm(false)}
+                  className="rounded-lg px-4 py-2 text-sm hover:bg-muted transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => { setShowClearConfirm(false); handleImport(); }}
+                  disabled={!confirmed}
+                  className="rounded-lg bg-destructive text-destructive-foreground px-4 py-2 text-sm font-semibold hover:bg-destructive/90 transition-colors disabled:opacity-50"
+                >
+                  Delete and import
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
