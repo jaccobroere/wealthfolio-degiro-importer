@@ -1,0 +1,220 @@
+/**
+ * Mapping step (T07, step 2/4).
+ *
+ * Selects the destination account and confirms every unseen security via
+ * `ctx.api['market-data'].searchTicker(query)`. NEVER auto-accepts the first
+ * result. Reuses exact saved mappings via
+ * `ctx.api.activities.getImportMapping(accountId, contextKind)` only after
+ * verifying canonical identity (symbol+MIC+provider) matches. Unresolved or
+ * ambiguous symbols block progression to review.
+ *
+ * This component is presentational: it receives the instrument symbols, their
+ * current resolutions, and callbacks. The page performs the actual host API
+ * calls (searchTicker, getImportMapping) in effects/handlers.
+ */
+import { useState, type ReactElement } from 'react';
+import { Button, Badge } from '@wealthfolio/ui';
+import { AlertCircle, CheckCircle2, HelpCircle, Search, Loader2 } from 'lucide-react';
+import type { SymbolResolution } from '../state/import-state';
+import { AccountSelect, type AccountOption } from './account-select';
+
+export interface MappingStepProps {
+  accounts: AccountOption[];
+  accountId: string | null;
+  onSelectAccount: (accountId: string) => void;
+  instrumentSymbols: string[];
+  symbolResolutions: Record<string, SymbolResolution>;
+  /** Called when the user clicks "Search" for a symbol. */
+  onSearchSymbol: (sourceTickerOrIsin: string) => void;
+  /** Called when the user manually confirms a search result by index. */
+  onConfirmSymbol: (sourceTickerOrIsin: string, resultIndex: number) => void;
+  /** Whether a search is in progress for a symbol. */
+  searchingFor: string | null;
+  /** Last search results for a symbol (for manual confirmation). */
+  searchResults: { symbol: string; results: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] } | null;
+  /** Whether saved mappings are being loaded. */
+  loadingMappings: boolean;
+  /** Continue to review (only enabled when all symbols resolved). */
+  onContinue: () => void;
+  /** Go back to upload. */
+  onBack: () => void;
+}
+
+export function MappingStep(props: MappingStepProps): ReactElement {
+  const { accounts, accountId, onSelectAccount, instrumentSymbols, symbolResolutions, onSearchSymbol, onConfirmSymbol, searchingFor, searchResults, loadingMappings, onContinue, onBack } = props;
+
+  const allResolved = instrumentSymbols.every((s) => symbolResolutions[s]?.status === 'resolved');
+  const unresolvedCount = instrumentSymbols.filter((s) => symbolResolutions[s]?.status !== 'resolved').length;
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold">Step 2 — Account & symbol mapping</h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Select the destination account and confirm every security symbol. Ambiguous or unresolved
+          symbols block the import.
+        </p>
+      </div>
+
+      <AccountSelect accounts={accounts} accountId={accountId} onChange={onSelectAccount} />
+
+      {loadingMappings ? (
+        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading saved mappings…
+        </p>
+      ) : null}
+
+      {accountId && instrumentSymbols.length > 0 ? (
+        <div className="space-y-3">
+          <h3 className="text-sm font-medium">
+            Securities to confirm ({instrumentSymbols.length})
+          </h3>
+          <div className="space-y-2">
+            {instrumentSymbols.map((sym) => (
+              <SymbolRow
+                key={sym}
+                symbol={sym}
+                resolution={symbolResolutions[sym] ?? { status: 'pending' }}
+                onSearch={() => onSearchSymbol(sym)}
+                onConfirm={(idx) => onConfirmSymbol(sym, idx)}
+                searching={searchingFor === sym}
+                searchResults={searchResults?.symbol === sym ? searchResults.results : null}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {accountId && instrumentSymbols.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No instrument securities in this statement (cash movements only). Continue to review.
+        </p>
+      ) : null}
+
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" onClick={onBack} data-testid="mapping-back">
+          Back
+        </Button>
+        <div className="flex items-center gap-3">
+          {unresolvedCount > 0 ? (
+            <Badge variant="warning" data-testid="unresolved-count">
+              {unresolvedCount} unresolved
+            </Badge>
+          ) : null}
+          <Button
+            disabled={!accountId || !allResolved}
+            onClick={onContinue}
+            data-testid="mapping-continue"
+          >
+            Continue to review
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface SymbolRowProps {
+  symbol: string;
+  resolution: SymbolResolution;
+  onSearch: () => void;
+  onConfirm: (resultIndex: number) => void;
+  searching: boolean;
+  searchResults: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] | null;
+}
+
+function SymbolRow({ symbol, resolution, onSearch, onConfirm, searching, searchResults }: SymbolRowProps): ReactElement {
+  const [showResults, setShowResults] = useState(false);
+
+  return (
+    <div className="border border-border rounded-md p-3 space-y-2" data-testid={`symbol-row-${symbol}`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-medium font-mono truncate">{symbol}</p>
+          <ResolutionBadge resolution={resolution} />
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            onSearch();
+            setShowResults(true);
+          }}
+          disabled={searching}
+          data-testid={`search-btn-${symbol}`}
+        >
+          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          Search
+        </Button>
+      </div>
+
+      {showResults && searchResults && searchResults.length > 0 ? (
+        <div className="space-y-1" data-testid={`search-results-${symbol}`}>
+          <p className="text-xs text-muted-foreground">
+            {searchResults.length} result(s) — select the correct instrument:
+          </p>
+          {searchResults.map((r, i) => (
+            <button
+              key={`${r.symbol}-${r.exchange}-${i}`}
+              type="button"
+              onClick={() => {
+                onConfirm(i);
+                setShowResults(false);
+              }}
+              className="w-full text-left text-sm border border-border rounded px-2 py-1 hover:bg-accent"
+              data-testid={`search-result-${symbol}-${i}`}
+            >
+              <span className="font-mono">{r.symbol}</span>
+              <span className="text-muted-foreground"> — {r.exchange}</span>
+              {r.exchangeMic ? <span className="text-muted-foreground"> ({r.exchangeMic})</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {showResults && searchResults && searchResults.length === 0 ? (
+        <p className="text-xs text-destructive" data-testid={`no-results-${symbol}`}>
+          No results found. This symbol blocks the import.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+function ResolutionBadge({ resolution }: { resolution: SymbolResolution }): ReactElement {
+  switch (resolution.status) {
+    case 'resolved':
+      return (
+        <Badge variant="success" className="mt-1">
+          <CheckCircle2 className="h-3 w-3 mr-1" />
+          {resolution.mapping.symbol}
+          {resolution.mapping.exchangeMic ? ` · ${resolution.mapping.exchangeMic}` : ''}
+          {resolution.mapping.fromSaved ? ' (saved)' : ''}
+        </Badge>
+      );
+    case 'ambiguous':
+      return (
+        <Badge variant="warning" className="mt-1">
+          <HelpCircle className="h-3 w-3 mr-1" />
+          Ambiguous ({resolution.candidateCount} candidates)
+        </Badge>
+      );
+    case 'no-results':
+      return (
+        <Badge variant="destructive" className="mt-1">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          No results
+        </Badge>
+      );
+    case 'blocked':
+      return (
+        <Badge variant="destructive" className="mt-1">
+          <AlertCircle className="h-3 w-3 mr-1" />
+          Blocked: {resolution.reason}
+        </Badge>
+      );
+    default:
+      return <Badge variant="secondary" className="mt-1">Pending</Badge>;
+  }
+}
