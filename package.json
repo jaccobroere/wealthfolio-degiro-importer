@@ -1,35 +1,73 @@
 {
-  "name": "degiro-importer-addon",
-  "version": "1.0.1",
+  "name": "wealthfolio-degiro-importer",
+  "version": "1.1.0",
   "type": "module",
-  "description": "DeGiro account statement importer for Wealthfolio",
-  "author": "shuisman",
+  "description": "Wealthfolio 3.6.1 addon for importing DEGIRO account statements",
+  "author": "shuisman; port maintained by Jacco Broere",
   "license": "MIT",
+  "packageManager": "pnpm@10.34.5",
   "keywords": ["wealthfolio", "degiro", "importer", "addon", "finance"],
   "repository": {
     "type": "git",
-    "url": "https://github.com/shuisman/degiro-importer.git"
+    "url": "https://github.com/jaccobroere/wealthfolio-degiro-importer.git"
   },
-  "homepage": "https://github.com/shuisman/degiro-importer#readme",
+  "homepage": "https://github.com/jaccobroere/wealthfolio-degiro-importer#readme",
   "scripts": {
+    "build": "vite build",
     "dev": "vite build --watch",
-    "build": "tsc --noEmit && vite build",
-    "bundle": "npm run build && node bundle.mjs"
-  },
-  "devDependencies": {
-    "@types/react": "^19.0.0",
-    "@types/react-dom": "^19.0.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "rollup-plugin-external-globals": "^0.13.0",
-    "tsx": "^4.21.0",
-    "typescript": "^5.7.0",
-    "vite": "^6.0.0"
-  },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "dev:server": "wealthfolio dev",
+    "clean": "rm -rf dist",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "inspect:csv": "tsx scripts/inspect-csv.ts",
+    "acceptance:local": "vitest run -c vitest.acceptance.config.ts",
+    "verify": "echo 'pnpm verify: wired in T08 (format/lint/type-check/test/build/fixture/manifest/package validation)' && exit 1",
+    "verify:release": "echo 'pnpm verify:release: wired in T08 (verify + real-statement acceptance + deterministic ZIP/checksum)' && exit 1"
   },
   "dependencies": {
-    "@wealthfolio/addon-sdk": "^3.3.0"
+    "papaparse": "5.5.4",
+    "decimal.js": "10.6.0"
+  },
+  "peerDependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "@wealthfolio/addon-sdk": "^3.6.0",
+    "@wealthfolio/ui": "^3.6.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@tailwindcss/vite": "^4.1.13",
+    "@tanstack/react-query": "^5.90.20",
+    "@types/node": "^20.19.0",
+    "@types/papaparse": "^5.3.15",
+    "@types/react": "^19.2.13",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.0.2",
+    "@wealthfolio/addon-dev-tools": "^3.6.0",
+    "@wealthfolio/addon-sdk": "^3.6.0",
+    "@wealthfolio/ui": "^3.6.0",
+    "date-fns": "^4.1.0",
+    "decimal.js": "10.6.0",
+    "eslint": "^9.18.0",
+    "fast-check": "^3.19.0",
+    "lucide-react": "^0.561.0",
+    "papaparse": "5.5.4",
+    "prettier": "^3.3.3",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.7.0",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.20.0",
+    "vite": "^7.1.5",
+    "vitest": "^3.2.0"
   }
 }
