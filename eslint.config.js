@@ -11,13 +11,6 @@ export default tseslint.config(
       'artifacts/**',
       '.local/**',
       'pnpm-lock.yaml',
-      // T03: the pure core (src/domain, src/parser, src/mapping, src/validation,
-      // src/duplicates, src/reconciliation) lints under this config. The legacy
-      // SDK 3.3 UI (src/addon.tsx, src/components/**, src/types.ts) is rewritten
-      // in T06; until then it is excluded so the pure core lints cleanly.
-      'src/addon.tsx',
-      'src/components/**',
-      'src/types.ts',
     ],
   },
   js.configs.recommended,
@@ -28,6 +21,18 @@ export default tseslint.config(
       parserOptions: {
         ecmaFeatures: { jsx: true },
       },
+    },
+    rules: {
+      // Allow leading-underscore identifiers to mark intentionally-unused
+      // params/locals (matches the repo's existing convention).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
     },
   },
 );
