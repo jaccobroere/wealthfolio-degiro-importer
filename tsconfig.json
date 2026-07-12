@@ -21,10 +21,29 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "react", "react-dom"]
   },
-  // T02 baseline: the legacy upstream src/ targets SDK 3.3 and is replaced by
-  // the pure-core refactor in T03. It is deliberately excluded here so the
-  // toolchain (config files) type-checks cleanly today. T03 reintroduces
-  // src/** under this same strict configuration.
-  "include": ["vite.config.ts", "vitest.config.ts"],
-  "exclude": ["src/**", "dist/**", "node_modules/**", "tests/**", "scripts/**"]
+  // T03: the pure core (src/domain, src/parser, src/mapping, src/validation,
+  // src/duplicates, src/reconciliation), the inspector script, and the test
+  // suite type-check under these strict settings. The legacy SDK 3.3 UI
+  // (src/addon.tsx, src/components/**, src/types.ts) is rewritten in T06; until
+  // then it is excluded so the pure core type-checks cleanly on its own.
+  "include": [
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.acceptance.config.ts",
+    "src/domain/**/*.ts",
+    "src/parser/**/*.ts",
+    "src/mapping/**/*.ts",
+    "src/validation/**/*.ts",
+    "src/duplicates/**/*.ts",
+    "src/reconciliation/**/*.ts",
+    "scripts/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "dist/**",
+    "node_modules/**",
+    "src/addon.tsx",
+    "src/components/**",
+    "src/types.ts"
+  ]
 }

@@ -17,30 +17,36 @@ No backend, no server — everything runs inside the Wealthfolio addon sandbox.
 ## Build & test
 
 ```bash
-npm run build           # tsc --noEmit + vite build → dist/addon.js
-npm run bundle          # build + PowerShell zip → degiro-importer.zip (Windows only)
-npm run dev             # vite build --watch
-npx tsx test-parse.mts Account.csv   # smoke-test parser without Wealthfolio
+pnpm build             # vite build → dist/addon.js (UI rewrite is T06)
+pnpm type-check        # strict tsc --noEmit over the pure core + tests
+pnpm test              # vitest unit + golden fixture tests (synthetic only)
+pnpm inspect:csv -- "$DEGIRO_ACCEPTANCE_CSV" --summary-only   # privacy-safe inspector
+DEGIRO_ACCEPTANCE_CSV=/abs/Account.csv pnpm acceptance:local  # local real-statement gate
 ```
 
 Install in Wealthfolio: Settings → Addons → Install from file → select zip.
 
 ---
 
-## Key file map
+## Key file map (T03 pure core)
+
+The pure core (no React / no Wealthfolio SDK) lives under `src/domain`,
+`src/parser`, `src/mapping`, `src/validation`, `src/duplicates`, and
+`src/reconciliation`. The legacy SDK 3.3 UI (`src/addon.tsx`, `src/components/**`,
+`src/types.ts`) is rewritten in T06.
 
 | File | Purpose |
 |---|---|
-| `src/addon.tsx` | Entry point — `enable(ctx)` registers sidebar + route |
-| `src/types.ts` | Re-exports from `@wealthfolio/addon-sdk` — import from here, not the SDK directly |
-| `src/parser/csv.ts` | Raw CSV text → `DeGiroRow[]` |
-| `src/parser/mapper.ts` | `DeGiroRow[]` → `ActivityImport[]` |
-| `src/parser/symbols.ts` | Extract unique ISINs, apply ticker mappings |
-| `src/parser/openfigi.ts` | ISIN → ticker via OpenFIGI API (available but not wired up) |
-| `src/components/ImporterPage.tsx` | Orchestrator: idle → mapping → review → importing → done |
-| `src/components/SymbolMappingStep.tsx` | ISIN lookup + confirm step |
-| `src/components/ActivityTable.tsx` | Editable review table |
-| `src/components/FileUpload.tsx` | Drag-drop CSV upload |
+| `src/parser/parse-csv.ts` | Raw CSV text → `DegiroRow[]` (12-col, Dutch/English headers) |
+| `src/parser/parse-decimal.ts` | `parseDegiroDecimal()` — Dutch locale (`.` thousands, `,` decimal) |
+| `src/parser/parse-date.ts` | `DD-MM-YYYY` + `HH:MM` → DST-correct ISO 8601 (Europe/Amsterdam) |
+| `src/parser/parse-and-map.ts` | End-to-end pipeline → batch + reconciliation (+ fingerprints) |
+| `src/mapping/classify-row.ts` | Row → kind / narrow skip reason; trade-description parsing |
+| `src/mapping/map-order-group.ts` | Order-id grouping: partial fills, fees, accrued interest, FX |
+| `src/mapping/map-standalone.ts` | Standalone rows → activity or known-skip |
+| `src/validation/validate-batch.ts` | Every row → one outcome; `BatchOutcome` + summary |
+| `src/duplicates/fingerprint.ts` | SHA-256 idempotity fingerprints + overlap keys |
+| `src/reconciliation/reconcile.ts` | Net positions, cash roll-ups, accrued-interest presence |
 
 ---
 
