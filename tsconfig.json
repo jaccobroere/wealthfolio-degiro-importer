@@ -21,30 +21,18 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "react", "react-dom"]
   },
-  // T03: the pure core (src/domain, src/parser, src/mapping, src/validation,
-  // src/duplicates, src/reconciliation), the inspector script, and the test
-  // suite type-check under these strict settings. The legacy SDK 3.3 UI
-  // (src/addon.tsx, src/components/**, src/types.ts) is rewritten in T06; until
-  // then it is excluded so the pure core type-checks cleanly on its own.
+  // T06: the whole `src/**` tree now type-checks strictly under the 3.6.1
+  // sandbox contract. The legacy SDK 3.3 UI (src/addon.tsx, src/components/**,
+  // src/types.ts) has been replaced by src/addon.tsx + src/pages/**.
   "include": [
     "vite.config.ts",
     "vitest.config.ts",
     "vitest.acceptance.config.ts",
-    "src/domain/**/*.ts",
-    "src/parser/**/*.ts",
-    "src/mapping/**/*.ts",
-    "src/validation/**/*.ts",
-    "src/duplicates/**/*.ts",
-    "src/reconciliation/**/*.ts",
-    "src/wealthfolio/**/*.ts",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     "scripts/**/*.ts",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "tests/**/*.tsx"
   ],
-  "exclude": [
-    "dist/**",
-    "node_modules/**",
-    "src/addon.tsx",
-    "src/components/**",
-    "src/types.ts"
-  ]
+  "exclude": ["dist/**", "node_modules/**"]
 }
