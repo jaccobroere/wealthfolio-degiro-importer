@@ -39,6 +39,7 @@ vi.mock('react-dom/client', () => ({
 import type {
   AddonContext,
   AddonRouteLocation,
+  AddonRouteRenderContext,
   RouteConfig,
   SidebarItemConfig,
   SidebarItemHandle,
@@ -140,6 +141,22 @@ describe('addon sandbox lifecycle (T06)', () => {
 
     expect(createRootMock).toHaveBeenCalledTimes(1);
     expect(fakeRoot.render).toHaveBeenCalledTimes(3);
+  });
+
+  it('acknowledges a host route render after scheduling the React render', () => {
+    expect(routeConfig).toBeDefined();
+    const onRendered = vi.fn();
+
+    routeConfig!.render({
+      root: makeRootEl(),
+      location: fakeLocation,
+      // The 3.6.1 iframe host supplies this acknowledgement callback at
+      // runtime, although it is intentionally absent from the public SDK type.
+      onRendered,
+    } as AddonRouteRenderContext & { onRendered: () => void });
+
+    expect(fakeRoot.render).toHaveBeenCalledTimes(1);
+    expect(onRendered).toHaveBeenCalledTimes(1);
   });
 
   it('onDisable removes the sidebar item exactly once and unmounts the root exactly once', () => {

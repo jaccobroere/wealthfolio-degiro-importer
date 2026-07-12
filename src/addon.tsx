@@ -47,7 +47,7 @@ let reactRoot: Root | null = null;
  * reuses it on every subsequent render. The host hands us a fresh `root`
  * HTMLElement each time; we mount into it once and keep the `Root` handle.
  */
-function render({ root, location }: AddonRouteRenderContext): void {
+function render({ root, location, ...hostContext }: AddonRouteRenderContext): void {
   // Reuse the existing root across renders; create exactly once per enable
   // lifecycle. `root ??=` is intentionally NOT used here because the host may
   // pass a new HTMLElement on re-render — we keep the FIRST root's Root handle
@@ -57,6 +57,15 @@ function render({ root, location }: AddonRouteRenderContext): void {
     reactRoot = createRoot(root);
   }
   reactRoot.render(createElement(ImporterPage, { ctx: ctxRef, location }));
+  // Wealthfolio 3.6.1's iframe sandbox includes this internal acknowledgement
+  // callback in the runtime context. Calling it prevents the hidden iframe's
+  // next-paint fallback from blocking route completion for 10 seconds. The
+  // public SDK type intentionally exposes only `root` and `location`, so keep
+  // the runtime-only field isolated here.
+  const onRendered = (hostContext as { onRendered?: unknown }).onRendered;
+  if (typeof onRendered === 'function') {
+    onRendered();
+  }
 }
 
 /**
