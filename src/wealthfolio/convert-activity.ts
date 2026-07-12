@@ -75,7 +75,10 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
     accountId,
     activityType: toSdkActivityType(draft.activityType),
     date: draft.date,
-    symbol: isInstrumentSymbol(draft.symbol) ? draft.symbol : undefined,
+    // The v3.6.1 server's ActivityImport wire model requires a string even
+    // for cash-only activities. An empty symbol is its documented cash form;
+    // omitting it produces a 422 before the read-only checkImport gate runs.
+    symbol: isInstrumentSymbol(draft.symbol) ? draft.symbol : '',
     quantity: draft.quantity || undefined,
     unitPrice: draft.unitPrice || undefined,
     amount: draft.amount || undefined,
