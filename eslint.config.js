@@ -11,11 +11,13 @@ export default tseslint.config(
       'artifacts/**',
       '.local/**',
       'pnpm-lock.yaml',
-      // T02 baseline: the legacy upstream src/ targets SDK 3.3 and is replaced
-      // by the pure-core refactor in T03. It is excluded here (mirroring
-      // tsconfig.json) so the toolchain lints cleanly today. T03 reintroduces
-      // src/** under this same configuration.
-      'src/**',
+      // T03: the pure core (src/domain, src/parser, src/mapping, src/validation,
+      // src/duplicates, src/reconciliation) lints under this config. The legacy
+      // SDK 3.3 UI (src/addon.tsx, src/components/**, src/types.ts) is rewritten
+      // in T06; until then it is excluded so the pure core lints cleanly.
+      'src/addon.tsx',
+      'src/components/**',
+      'src/types.ts',
     ],
   },
   js.configs.recommended,
