@@ -36,6 +36,7 @@
     "src/validation/**/*.ts",
     "src/duplicates/**/*.ts",
     "src/reconciliation/**/*.ts",
+    "src/wealthfolio/**/*.ts",
     "scripts/**/*.ts",
     "tests/**/*.ts"
   ],
