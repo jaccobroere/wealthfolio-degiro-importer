@@ -71,7 +71,9 @@ export function fingerprintInput(activity: ActivityDraft): string {
       normDec(activity.fee),
       sortedRows(activity.group.tradeSourceRowNumbers),
       sortedRows(activity.group.feeSourceRowNumbers),
-      activity.group.accruedInterest ? sortedRows(activity.group.accruedInterest.sourceRowNumbers) : '',
+      activity.group.accruedInterest
+        ? sortedRows(activity.group.accruedInterest.sourceRowNumbers)
+        : '',
     );
   } else {
     parts.push(
@@ -161,7 +163,9 @@ export async function computeFingerprints(activities: ActivityDraft[]): Promise<
 export async function sha256Hex(input: string): Promise<string> {
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) {
-    throw new Error('Web Crypto subtle is unavailable; fingerprints require globalThis.crypto.subtle');
+    throw new Error(
+      'Web Crypto subtle is unavailable; fingerprints require globalThis.crypto.subtle',
+    );
   }
   const data = new TextEncoder().encode(input);
   const buf = await subtle.digest('SHA-256', data);

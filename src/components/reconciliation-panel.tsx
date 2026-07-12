@@ -34,7 +34,8 @@ export interface ReconciliationPanelProps {
 }
 
 export function ReconciliationPanel(props: ReconciliationPanelProps): ReactElement {
-  const { state, reconciliation, conservation, residuals, gate, onAcknowledge, onImport, onBack } = props;
+  const { state, reconciliation, conservation, residuals, gate, onAcknowledge, onImport, onBack } =
+    props;
 
   return (
     <div className="space-y-6">
@@ -56,11 +57,7 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
           <Stat label="Known skips" value={conservation.skipRows} />
           <Stat label="Unsupported" value={conservation.unsupportedRows} />
           <Stat label="Invalid" value={conservation.invalidRows} />
-          <Stat
-            label="Residual"
-            value={conservation.residual}
-            ok={conservation.residual === 0}
-          />
+          <Stat label="Residual" value={conservation.residual} ok={conservation.residual === 0} />
           <Stat
             label="Activities w/o source rows"
             value={conservation.activitiesWithoutSourceRows}
@@ -140,8 +137,14 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
       <section className="space-y-2">
         <h3 className="text-sm font-medium">DEGIRO specifics</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-          <Stat label="Accrued interest rows" value={reconciliation.accruedInterestSourceRowCount} />
-          <Stat label="Accrued interest activities" value={reconciliation.accruedInterestActivityCount} />
+          <Stat
+            label="Accrued interest rows"
+            value={reconciliation.accruedInterestSourceRowCount}
+          />
+          <Stat
+            label="Accrued interest activities"
+            value={reconciliation.accruedInterestActivityCount}
+          />
           <Stat label="Internal cash skips" value={reconciliation.knownInternalMovementCount} />
           <Stat
             label="BUY w/ accrued (T09-gate)"
@@ -204,7 +207,12 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
 
       {/* Actions */}
       <div className="flex items-center justify-between">
-        <Button variant="ghost" onClick={onBack} disabled={state.importing} data-testid="reconcile-back">
+        <Button
+          variant="ghost"
+          onClick={onBack}
+          disabled={state.importing}
+          data-testid="reconcile-back"
+        >
           Back
         </Button>
         <div className="flex items-center gap-3">

@@ -7,14 +7,7 @@
  */
 import type { ReactElement } from 'react';
 import { Badge } from '@wealthfolio/ui';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@wealthfolio/ui';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@wealthfolio/ui';
 import type { ReviewRow, ReviewFilters } from '../state/import-state';
 import type { ReviewCategory } from '../state/import-state';
 
@@ -32,7 +25,10 @@ const CATEGORY_LABEL: Record<ReviewCategory, string> = {
   'fatal-invalid': 'Fatal / invalid',
 };
 
-const CATEGORY_VARIANT: Record<ReviewCategory, 'default' | 'destructive' | 'success' | 'warning' | 'secondary' | 'info'> = {
+const CATEGORY_VARIANT: Record<
+  ReviewCategory,
+  'default' | 'destructive' | 'success' | 'warning' | 'secondary' | 'info'
+> = {
   'new-valid': 'success',
   duplicate: 'secondary',
   'known-skip': 'info',
@@ -81,12 +77,16 @@ export function ReviewTable({ rows, filters }: ReviewTableProps): ReactElement {
               </TableRow>
             ) : null}
             {filtered.map((r, i) => (
-              <TableRow key={`${r.sourceRowNumbers.join(',')}-${i}`} data-testid={`review-row-${i}`}>
-                <TableCell className="font-mono text-xs">
-                  {r.sourceRowNumbers.join(',')}
-                </TableCell>
+              <TableRow
+                key={`${r.sourceRowNumbers.join(',')}-${i}`}
+                data-testid={`review-row-${i}`}
+              >
+                <TableCell className="font-mono text-xs">{r.sourceRowNumbers.join(',')}</TableCell>
                 <TableCell>
-                  <Badge variant={CATEGORY_VARIANT[r.category]} data-testid={`review-category-${i}`}>
+                  <Badge
+                    variant={CATEGORY_VARIANT[r.category]}
+                    data-testid={`review-category-${i}`}
+                  >
                     {CATEGORY_LABEL[r.category]}
                   </Badge>
                 </TableCell>
@@ -94,7 +94,11 @@ export function ReviewTable({ rows, filters }: ReviewTableProps): ReactElement {
                 <TableCell className="text-sm font-mono">
                   {r.symbol ?? '—'}
                   {r.unresolvedSymbol ? <span className="text-destructive ml-1">⚠</span> : null}
-                  {r.hasAccruedInterest ? <span className="text-warning ml-1" title="Carries accrued interest (T09-gate)">⏳</span> : null}
+                  {r.hasAccruedInterest ? (
+                    <span className="text-warning ml-1" title="Carries accrued interest (T09-gate)">
+                      ⏳
+                    </span>
+                  ) : null}
                 </TableCell>
                 <TableCell className="text-xs">{r.date ? r.date.slice(0, 10) : '—'}</TableCell>
                 <TableCell className="text-sm text-right font-mono">{r.quantity ?? '—'}</TableCell>

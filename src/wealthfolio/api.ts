@@ -30,10 +30,7 @@ export function getActivities(api: HostAPI, accountId: string): Promise<Activity
 
 /** Read-only validation gate (permission: `activities.checkImport`). Call
  * before any write. Fatal host errors propagate as rejections. */
-export function checkImport(
-  api: HostAPI,
-  activities: ActivityImport[],
-): Promise<ActivityImport[]> {
+export function checkImport(api: HostAPI, activities: ActivityImport[]): Promise<ActivityImport[]> {
   return api.activities.checkImport(activities);
 }
 
@@ -71,10 +68,7 @@ export function saveImportMapping(
 
 /** Search the market-data ticker registry (permission:
  * `market-data.searchTicker`). */
-export function searchTicker(
-  api: HostAPI,
-  query: string,
-): Promise<SymbolSearchResult[]> {
+export function searchTicker(api: HostAPI, query: string): Promise<SymbolSearchResult[]> {
   return api.market.searchTicker(query);
 }
 

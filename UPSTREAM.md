@@ -2,13 +2,13 @@
 
 This repository is a fork/port of **shuisman/degiro-importer**.
 
-| Field | Value |
-| --- | --- |
+| Field               | Value                                       |
+| ------------------- | ------------------------------------------- |
 | Upstream repository | https://github.com/shuisman/degiro-importer |
-| Upstream release | `v1.0.1` |
-| Base commit | `b6fa986a511352d9d14715425f85b197dd12efeb` |
-| Upstream license | MIT |
-| Upstream `LICENSE` | preserved verbatim in this repository |
+| Upstream release    | `v1.0.1`                                    |
+| Base commit         | `b6fa986a511352d9d14715425f85b197dd12efeb`  |
+| Upstream license    | MIT                                         |
+| Upstream `LICENSE`  | preserved verbatim in this repository       |
 
 ## How this repository tracks upstream
 

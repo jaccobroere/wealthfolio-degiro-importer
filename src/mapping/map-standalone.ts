@@ -7,10 +7,7 @@
 
 import { Decimal } from 'decimal.js';
 import type { DegiroRow } from '../domain/degiro-row';
-import {
-  type ActivityDraft,
-  cashSymbol,
-} from '../domain/activity-draft';
+import { type ActivityDraft, cashSymbol } from '../domain/activity-draft';
 import { changeAmount, classifyRow } from './classify-row';
 import { toIsoDate } from '../parser/parse-date';
 import type { SkipReason } from '../domain/skip-reason';
@@ -131,9 +128,7 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
           sourceRowNumbers: [row.rowIndex],
           isValid: true,
           errors: {},
-          warnings: raw.isNegative()
-            ? { amount: ['Negative interest — DEGIRO charged you'] }
-            : {},
+          warnings: raw.isNegative() ? { amount: ['Negative interest — DEGIRO charged you'] } : {},
         },
       };
 

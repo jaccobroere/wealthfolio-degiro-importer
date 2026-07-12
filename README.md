@@ -35,10 +35,22 @@ pnpm type-check     # tsc --noEmit
 pnpm test           # vitest run (synthetic fixtures only)
 pnpm lint
 pnpm format
+pnpm verify         # CI-safe: synthetic tests, build, privacy and ZIP validation
+pnpm verify:release # local only: requires DEGIRO_ACCEPTANCE_CSV
 ```
 
-Scripts wired in later tasks: `pnpm inspect:csv`, `pnpm acceptance:local`,
-`pnpm verify`, `pnpm verify:release`.
+`pnpm verify` never reads a personal statement. `pnpm verify:release` is the
+mandatory local release gate: it requires `DEGIRO_ACCEPTANCE_CSV`, runs the
+summary-only acceptance suite, and creates `artifacts/wealthfolio-degiro-importer-1.1.0.zip`
+plus `artifacts/SHA256SUMS`. It does not publish, tag, or install anything.
+
+## Download and install ZIP
+
+The ZIP is the distributable product. Download the versioned ZIP, verify it
+with `(cd artifacts && shasum -a 256 -c SHA256SUMS)`, then select that ZIP in
+Wealthfolio's add-on installer. The archive contains only the manifest, this
+README, and runtime build files; it does not contain source, tests, lockfiles,
+or statements.
 
 ## Privacy
 

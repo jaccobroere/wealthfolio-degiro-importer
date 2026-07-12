@@ -38,7 +38,9 @@ function main(): void {
   const args = parseArgs(process.argv);
   if (!args.csvPath) {
     console.error('Usage: inspect:csv -- <path-to-Account.csv> [--summary-only]');
-    console.error('Tip: DEGIRO_ACCEPTANCE_CSV=/abs/path pnpm inspect:csv -- "$DEGIRO_ACCEPTANCE_CSV" --summary-only');
+    console.error(
+      'Tip: DEGIRO_ACCEPTANCE_CSV=/abs/path pnpm inspect:csv -- "$DEGIRO_ACCEPTANCE_CSV" --summary-only',
+    );
     process.exit(2);
   }
 
@@ -74,9 +76,7 @@ function main(): void {
     });
 }
 
-function printSummary(
-  r: Awaited<ReturnType<typeof parseAndMapWithFingerprints>>,
-): void {
+function printSummary(r: Awaited<ReturnType<typeof parseAndMapWithFingerprints>>): void {
   const { batch, reconciliation } = r;
   const s = batch.summary;
 
@@ -87,13 +87,16 @@ function printSummary(
   console.log(`unsupported:        ${s.unsupportedCount}`);
   console.log(`invalid:            ${s.invalidCount}`);
   console.log(`fingerprint collide:${r.fingerprintCollisions.size}`);
-  console.log(`overlap clusters:   ${r.overlapClusterCount} (${r.overlapActivityCount} activities)`);
+  console.log(
+    `overlap clusters:   ${r.overlapClusterCount} (${r.overlapActivityCount} activities)`,
+  );
 
   console.log('--- by outcome ---');
   for (const [k, v] of Object.entries(s.byOutcome)) console.log(`  ${k.padEnd(14)} ${v}`);
 
   console.log('--- by activity type ---');
-  for (const [k, v] of Object.entries(s.byActivityType).sort()) console.log(`  ${k.padEnd(10)} ${v}`);
+  for (const [k, v] of Object.entries(s.byActivityType).sort())
+    console.log(`  ${k.padEnd(10)} ${v}`);
 
   console.log('--- known-skip reasons ---');
   for (const [k, v] of Object.entries(s.skipReasons).sort()) console.log(`  ${k.padEnd(28)} ${v}`);

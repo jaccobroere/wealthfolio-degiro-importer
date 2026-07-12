@@ -1,10 +1,6 @@
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type {
-  AddonContext,
-  HostAPI,
-  SymbolSearchResult,
-} from '@wealthfolio/addon-sdk';
+import type { AddonContext, HostAPI, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 
 import { ImporterPage } from '../../src/pages/importer-page';
 import { ReconciliationPanel } from '../../src/components/reconciliation-panel';
@@ -51,9 +47,30 @@ export const ACCRUED_INTEREST_CSV = `Datum,Tijd,Valutadatum,Product,ISIN,Omschri
 `;
 
 export const DEFAULT_SEARCH_RESULTS: Record<string, SymbolSearchResult[]> = {
-  IE00B3RBWM25: [symbolSearchResult({ symbol: 'VWCE', exchangeName: 'Xetra', exchangeMic: 'XETR', providerId: 'wf-vwce' })],
-  IE00B4L5Y983: [symbolSearchResult({ symbol: 'IWDA', exchangeName: 'Euronext Amsterdam', exchangeMic: 'XAMS', providerId: 'wf-iwda' })],
-  IE00LCL0001: [symbolSearchResult({ symbol: 'BOND-A', exchangeName: 'Xetra', exchangeMic: 'XETR', providerId: 'wf-bond-a' })],
+  IE00B3RBWM25: [
+    symbolSearchResult({
+      symbol: 'VWCE',
+      exchangeName: 'Xetra',
+      exchangeMic: 'XETR',
+      providerId: 'wf-vwce',
+    }),
+  ],
+  IE00B4L5Y983: [
+    symbolSearchResult({
+      symbol: 'IWDA',
+      exchangeName: 'Euronext Amsterdam',
+      exchangeMic: 'XAMS',
+      providerId: 'wf-iwda',
+    }),
+  ],
+  IE00LCL0001: [
+    symbolSearchResult({
+      symbol: 'BOND-A',
+      exchangeName: 'Xetra',
+      exchangeMic: 'XETR',
+      providerId: 'wf-bond-a',
+    }),
+  ],
 };
 
 export function createAddonContext(api: HostAPI): AddonContext {
@@ -66,13 +83,15 @@ export function createAddonContext(api: HostAPI): AddonContext {
   } as unknown as AddonContext;
 }
 
-export async function buildState(options: {
-  csv?: string;
-  accountId?: string | null;
-  acknowledged?: boolean;
-  resolvedSymbols?: boolean;
-  importedFingerprints?: string[];
-} = {}): Promise<ImportState> {
+export async function buildState(
+  options: {
+    csv?: string;
+    accountId?: string | null;
+    acknowledged?: boolean;
+    resolvedSymbols?: boolean;
+    importedFingerprints?: string[];
+  } = {},
+): Promise<ImportState> {
   const {
     csv = EXAMPLE_CSV,
     accountId = 'acct-1',
@@ -241,7 +260,7 @@ function resolvedMapping(sourceTickerOrIsin: string): ResolvedMapping {
   return {
     sourceTickerOrIsin,
     symbol: firstResult?.canonicalSymbol ?? firstResult?.symbol ?? sourceTickerOrIsin,
-    ...(firstResult?.canonicalExchangeMic ?? firstResult?.exchangeMic
+    ...((firstResult?.canonicalExchangeMic ?? firstResult?.exchangeMic)
       ? { exchangeMic: firstResult?.canonicalExchangeMic ?? firstResult?.exchangeMic }
       : {}),
     ...(firstResult?.providerId ? { providerId: firstResult.providerId } : {}),

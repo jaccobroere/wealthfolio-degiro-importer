@@ -88,7 +88,10 @@ export function parseDegiroDecimal(raw: string): Decimal {
     throw new DegiroDecimalError('non-digit fraction part', raw);
   }
 
-  const canonical = (neg ? '-' : '') + (intPart === '' ? '0' : intPart) + (fracPart !== undefined ? `.${fracPart}` : '');
+  const canonical =
+    (neg ? '-' : '') +
+    (intPart === '' ? '0' : intPart) +
+    (fracPart !== undefined ? `.${fracPart}` : '');
   return new Decimal(canonical);
 }
 
@@ -105,7 +108,12 @@ function validateThousands(body: string, sep: string, upTo: number, raw: string)
   const ok = /^(?:\d{1,3})(?:\u0020?\d{3})*$/.test(integer.split(sep).join(''));
   // The join approach above is loose; re-check per-group strictly instead.
   const groups = integer.split(sep);
-  if (!ok || groups.some((g, i) => (i === 0 ? g.length < 1 || g.length > 3 : g.length !== 3) || !/^\d+$/.test(g))) {
+  if (
+    !ok ||
+    groups.some(
+      (g, i) => (i === 0 ? g.length < 1 || g.length > 3 : g.length !== 3) || !/^\d+$/.test(g),
+    )
+  ) {
     throw new DegiroDecimalError('invalid thousands grouping', raw);
   }
 }

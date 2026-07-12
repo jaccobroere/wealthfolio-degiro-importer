@@ -5,13 +5,7 @@
  * Pure presentational — receives accounts + selected id + onChange.
  */
 import type { ReactElement } from 'react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@wealthfolio/ui';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@wealthfolio/ui';
 import { Landmark } from 'lucide-react';
 
 export interface AccountOption {

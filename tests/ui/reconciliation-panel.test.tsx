@@ -35,7 +35,11 @@ describe('DEGIRO reconciliation gate', () => {
   });
 
   it('keeps Import disabled when traded securities remain unresolved', async () => {
-    const state = await buildState({ csv: EXAMPLE_CSV, acknowledged: true, resolvedSymbols: false });
+    const state = await buildState({
+      csv: EXAMPLE_CSV,
+      acknowledged: true,
+      resolvedSymbols: false,
+    });
     renderReconciliation(state);
 
     expect((screen.getByTestId('import-button') as HTMLButtonElement).disabled).toBe(true);

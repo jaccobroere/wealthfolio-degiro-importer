@@ -27,23 +27,12 @@ import { mapStandalone } from '../mapping/map-standalone';
 import { validateRow } from './validate-row';
 
 /** Kinds that belong to an order-id group when an order id is present. */
-const GROUPABLE_KINDS = new Set([
-  'BUY',
-  'SELL',
-  'TRADE_FEE',
-  'ACCRUED_INTEREST',
-  'FX',
-  'TAX',
-]);
+const GROUPABLE_KINDS = new Set(['BUY', 'SELL', 'TRADE_FEE', 'ACCRUED_INTEREST', 'FX', 'TAX']);
 
 /** Whether a classification kind is groupable. */
-function isGroupable(kind: unknown): kind is
-  | 'BUY'
-  | 'SELL'
-  | 'TRADE_FEE'
-  | 'ACCRUED_INTEREST'
-  | 'FX'
-  | 'TAX' {
+function isGroupable(
+  kind: unknown,
+): kind is 'BUY' | 'SELL' | 'TRADE_FEE' | 'ACCRUED_INTEREST' | 'FX' | 'TAX' {
   return kind !== null && typeof kind === 'string' && GROUPABLE_KINDS.has(kind as string);
 }
 
@@ -107,7 +96,12 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
       outcomes.push({
         kind: 'known-skip',
         rowIndex: orphan.rowIndex,
-        reason: orphan.role === 'fx' ? 'fx-helper' : orphan.role === 'fee' ? 'orphan-trade-fee' : 'positive-reversal',
+        reason:
+          orphan.role === 'fx'
+            ? 'fx-helper'
+            : orphan.role === 'fee'
+              ? 'orphan-trade-fee'
+              : 'positive-reversal',
       });
     }
   }
@@ -128,7 +122,11 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
         });
       }
       for (const orphan of result.orphanSkips) {
-        outcomes.push({ kind: 'known-skip', rowIndex: orphan.rowIndex, reason: 'orphan-trade-fee' });
+        outcomes.push({
+          kind: 'known-skip',
+          rowIndex: orphan.rowIndex,
+          reason: 'orphan-trade-fee',
+        });
       }
       continue;
     }
@@ -171,7 +169,11 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
       } else if (res.kind === 'known-skip') {
         outcomes.push({ kind: 'known-skip', rowIndex: row.rowIndex, reason: res.reason });
       } else {
-        outcomes.push({ kind: 'unsupported', rowIndex: row.rowIndex, reason: 'standalone mapping rejected the row' });
+        outcomes.push({
+          kind: 'unsupported',
+          rowIndex: row.rowIndex,
+          reason: 'standalone mapping rejected the row',
+        });
       }
       continue;
     }
@@ -202,7 +204,11 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
 }
 
 /** Compute the privacy-safe batch summary (counts and reason codes only). */
-export function summarize(sourceRowCount: number, outcomes: RowOutcome[], activities: ActivityDraft[]): BatchSummary {
+export function summarize(
+  sourceRowCount: number,
+  outcomes: RowOutcome[],
+  activities: ActivityDraft[],
+): BatchSummary {
   const byOutcome = {
     activity: 0,
     'group-member': 0,
@@ -228,7 +234,11 @@ export function summarize(sourceRowCount: number, outcomes: RowOutcome[], activi
   }
 
   const accounted =
-    byOutcome.activity + byOutcome['group-member'] + byOutcome['known-skip'] + byOutcome.unsupported + byOutcome.invalid;
+    byOutcome.activity +
+    byOutcome['group-member'] +
+    byOutcome['known-skip'] +
+    byOutcome.unsupported +
+    byOutcome.invalid;
 
   return {
     sourceRowCount,

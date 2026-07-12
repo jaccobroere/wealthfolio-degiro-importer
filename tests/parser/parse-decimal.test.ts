@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { Decimal } from 'decimal.js';
-import { parseDegiroDecimal, tryParseDegiroDecimal, DegiroDecimalError } from '../../src/parser/parse-decimal';
+import {
+  parseDegiroDecimal,
+  tryParseDegiroDecimal,
+  DegiroDecimalError,
+} from '../../src/parser/parse-decimal';
 
 describe('parseDegiroDecimal (Dutch locale: . thousands, , decimal)', () => {
   it('parses the four thousands-separated BUY quantities (the bug fix)', () => {
