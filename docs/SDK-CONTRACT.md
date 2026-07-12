@@ -112,3 +112,43 @@ Resolved package versions (after `pnpm install`):
 - The 3.6.1 installer enforces: ≤ 256 entries, ≤ 5 MiB per file, ≤ 25 MiB total
   uncompressed, ≤ 50 MiB compressed. CSS/runtime assets emitted to `dist/` are
   loaded from the archive, so every emitted asset must be packaged.
+
+## T05 adapter implementation status
+
+T05 implemented the Wealthfolio adapter layer (`src/wealthfolio/`) that
+consumes the verified facts above. The verified contract facts in this
+document are unchanged; this section only records which adapter behaviors
+are implemented and which remain **T09-gated**.
+
+Implemented and covered by fake-host unit tests (`tests/wealthfolio/`):
+
+- `convert-activity.ts` is the single runtime boundary importing
+  `@wealthfolio/addon-sdk` activity types; decimal strings are preserved.
+- Drafts → `ActivityImport[]` (with required `isValid`/`isDraft`) → read-only
+  `checkImport` gate → accepted rows → `ActivityCreate[]` →
+  `saveMany({ creates })` (never a bare array, never `deleteIds`).
+- Duplicate detection via `activities.getAll(accountId)` filtered by
+  `metadata.importerId === 'degiro-importer'`; exact-duplicate fingerprints
+  are skipped (zero creates on re-import).
+- `saveMany` results are authoritative: only fingerprints appearing in
+  `created` are marked imported; failed/partial writes never mark failed
+  fingerprints.
+- Add-on isolation: entries with `importerId: revolut-importer` are ignored.
+- Mapping persistence via `getImportMapping`/`saveImportMapping`; saved
+  mappings auto-apply only after canonical-identity (symbol+MIC+provider)
+  re-verification; ambiguous `searchTicker` blocks; the first result is
+  never auto-selected.
+- Metadata schema v1 carries only non-sensitive provenance (no raw rows,
+  balances, filenames, or paths).
+
+Remaining **T09-gates** (not assumed by T05; must be proven on a disposable
+3.6.1 host before release):
+
+- **Metadata round-trip**: whether `saveMany()` → `getAll()` actually persists
+  `metadata` on the real host. T05 falls back to positional correlation if
+  metadata is absent, but the metadata round-trip is the verified protocol.
+- **`saveMany` partial/atomic behavior**: whether the host applies atomically
+  or partially. T05 treats `created`/`errors` as authoritative either way.
+- **DEGIRO accrued-interest representation**: grouped BUY drafts carrying
+  accrued interest remain blocked from production import until the host
+  representation is proven.
