@@ -9,14 +9,7 @@
 
 /** Wealthfolio activity types emitted by this importer. */
 export type ActivityType =
-  | 'BUY'
-  | 'SELL'
-  | 'DIVIDEND'
-  | 'TAX'
-  | 'DEPOSIT'
-  | 'WITHDRAWAL'
-  | 'INTEREST'
-  | 'FEE';
+  'BUY' | 'SELL' | 'DIVIDEND' | 'TAX' | 'DEPOSIT' | 'WITHDRAWAL' | 'INTEREST' | 'FEE';
 
 export const ACTIVITY_TYPES: readonly ActivityType[] = [
   'BUY',

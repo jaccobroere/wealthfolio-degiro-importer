@@ -40,7 +40,13 @@ import {
 import type { PipelineResultWithFingerprints } from '../parser/parse-and-map';
 import { getAllAccounts, getActivities, getImportMapping, searchTicker } from '../wealthfolio/api';
 import { buildDuplicateIndex } from '../wealthfolio/duplicate-index';
-import { readSavedMappings, resolveSymbol, identityToAsset, withSavedMapping, type CanonicalIdentity } from '../wealthfolio/symbol-mappings';
+import {
+  readSavedMappings,
+  resolveSymbol,
+  identityToAsset,
+  withSavedMapping,
+  type CanonicalIdentity,
+} from '../wealthfolio/symbol-mappings';
 import { runImport } from '../wealthfolio/import';
 import type { ImportFlowResult } from '../wealthfolio/types';
 import { isInstrumentSymbol } from '../domain/activity-draft';
@@ -56,7 +62,10 @@ export interface ImporterPageProps {
 export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   const [state, dispatch] = useReducer(importReducer, undefined, initialImportState);
   const [searchingFor, setSearchingFor] = useState<string | null>(null);
-  const [searchResults, setSearchResults] = useState<{ symbol: string; results: CompactSearchResult[] } | null>(null);
+  const [searchResults, setSearchResults] = useState<{
+    symbol: string;
+    results: CompactSearchResult[];
+  } | null>(null);
   const [loadingMappings, setLoadingMappings] = useState(false);
 
   // Load accounts on mount.
@@ -116,8 +125,12 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
                   mapping: {
                     sourceTickerOrIsin: sym,
                     symbol: outcome.identity.symbol,
-                    ...(outcome.identity.exchangeMic ? { exchangeMic: outcome.identity.exchangeMic } : {}),
-                    ...(outcome.identity.providerId ? { providerId: outcome.identity.providerId } : {}),
+                    ...(outcome.identity.exchangeMic
+                      ? { exchangeMic: outcome.identity.exchangeMic }
+                      : {}),
+                    ...(outcome.identity.providerId
+                      ? { providerId: outcome.identity.providerId }
+                      : {}),
                     fromSaved: outcome.fromSaved,
                   },
                 };
@@ -167,7 +180,9 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           results: results.map((r) => ({
             symbol: r.canonicalSymbol ?? r.symbol,
             exchange: r.exchange,
-            ...(r.canonicalExchangeMic ?? r.exchangeMic ? { exchangeMic: r.canonicalExchangeMic ?? r.exchangeMic } : {}),
+            ...((r.canonicalExchangeMic ?? r.exchangeMic)
+              ? { exchangeMic: r.canonicalExchangeMic ?? r.exchangeMic }
+              : {}),
             ...(r.providerId ? { providerId: r.providerId } : {}),
           })),
         });
@@ -217,7 +232,11 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       ...(identity.providerId ? { providerId: identity.providerId } : {}),
       fromSaved: false,
     };
-    dispatch({ type: 'RESOLVE_SYMBOL', sourceTickerOrIsin, resolution: { status: 'resolved', mapping } });
+    dispatch({
+      type: 'RESOLVE_SYMBOL',
+      sourceTickerOrIsin,
+      resolution: { status: 'resolved', mapping },
+    });
 
     // Persist the confirmed mapping.
     if (state.accountId) {
@@ -254,7 +273,12 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
         return undefined;
       };
 
-      const flowResult: ImportFlowResult = await runImport(ctx.api, accountId, drafts, resolveAsset);
+      const flowResult: ImportFlowResult = await runImport(
+        ctx.api,
+        accountId,
+        drafts,
+        resolveAsset,
+      );
       dispatch({
         type: 'IMPORT_SUCCESS',
         result: {
@@ -365,9 +389,7 @@ interface CompactSearchResult {
 }
 
 /** Convert a `ResolutionOutcome` to a UI `SymbolResolution`. */
-function outcomeToResolution(
-  outcome: ReturnType<typeof resolveSymbol>,
-): SymbolResolution {
+function outcomeToResolution(outcome: ReturnType<typeof resolveSymbol>): SymbolResolution {
   switch (outcome.status) {
     case 'resolved':
       return {
@@ -398,7 +420,9 @@ function Stepper({ step }: { step: ImportState['step'] }): ReactElement {
     { key: 'reconcile', label: 'Reconcile' },
     { key: 'done', label: 'Done' },
   ];
-  const activeIdx = steps.findIndex((s) => s.key === step || (step === 'importing' && s.key === 'reconcile'));
+  const activeIdx = steps.findIndex(
+    (s) => s.key === step || (step === 'importing' && s.key === 'reconcile'),
+  );
 
   return (
     <div className="flex items-center gap-1" data-testid="stepper">

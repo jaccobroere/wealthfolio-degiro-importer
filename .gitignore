@@ -6,6 +6,7 @@ dist/
 
 # Release artifacts
 artifacts/*.zip
+artifacts/SHA256SUMS
 
 # Coverage
 coverage/

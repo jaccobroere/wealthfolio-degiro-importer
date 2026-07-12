@@ -31,7 +31,13 @@ const FILTER_DEFS: { key: keyof ReviewFilters; label: string }[] = [
   { key: 'feesTaxesCredits', label: 'Fees/Taxes/Credits' },
 ];
 
-export function ReviewStep({ rows, filters, onFiltersChange, onContinue, onBack }: ReviewStepProps): ReactElement {
+export function ReviewStep({
+  rows,
+  filters,
+  onFiltersChange,
+  onContinue,
+  onBack,
+}: ReviewStepProps): ReactElement {
   const counts = countByCategory(rows);
   const hasBlocking = counts['requires-review'] > 0 || counts['fatal-invalid'] > 0;
 
@@ -93,7 +99,15 @@ export function ReviewStep({ rows, filters, onFiltersChange, onContinue, onBack 
   );
 }
 
-function FilterToggle({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }): ReactElement {
+function FilterToggle({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}): ReactElement {
   return (
     <button
       type="button"

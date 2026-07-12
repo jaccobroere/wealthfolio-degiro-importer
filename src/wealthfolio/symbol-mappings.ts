@@ -34,9 +34,7 @@ function mappingKey(sourceTickerOrIsin: string): string {
  * Read the saved symbol mappings for this importer from an
  * `ImportMappingData` object. Returns a map of source-id → canonical identity.
  */
-export function readSavedMappings(
-  mapping: ImportMappingData,
-): Map<string, CanonicalIdentity> {
+export function readSavedMappings(mapping: ImportMappingData): Map<string, CanonicalIdentity> {
   const out = new Map<string, CanonicalIdentity>();
   const sm = mapping.symbolMappings ?? {};
   for (const [key, value] of Object.entries(sm)) {
@@ -47,7 +45,11 @@ export function readSavedMappings(
     try {
       const parsed = JSON.parse(value) as CanonicalIdentity;
       if (parsed && typeof parsed.symbol === 'string') {
-        out.set(sourceId, { symbol: parsed.symbol, exchangeMic: parsed.exchangeMic, providerId: parsed.providerId });
+        out.set(sourceId, {
+          symbol: parsed.symbol,
+          exchangeMic: parsed.exchangeMic,
+          providerId: parsed.providerId,
+        });
       }
     } catch {
       // Ignore malformed entries; they block auto-apply (safe default).
@@ -163,6 +165,7 @@ export function resolveSymbol(
 
   const single = searchResults[0];
   const identity = resultToIdentity(single);
-  if (!identity.symbol) return { status: 'blocked', reason: 'Single search result has no canonical symbol' };
+  if (!identity.symbol)
+    return { status: 'blocked', reason: 'Single search result has no canonical symbol' };
   return { status: 'resolved', identity, fromSaved: false };
 }

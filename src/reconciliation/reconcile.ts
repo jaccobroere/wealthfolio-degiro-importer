@@ -93,7 +93,8 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
     // Positions: BUY/SELL only.
     if (a.activityType === 'BUY' || a.activityType === 'SELL') {
       const key = a.isin ?? a.symbol;
-      const signed = a.activityType === 'BUY' ? new Decimal(a.quantity) : new Decimal(a.quantity).neg();
+      const signed =
+        a.activityType === 'BUY' ? new Decimal(a.quantity) : new Decimal(a.quantity).neg();
       const existing = positionsMap.get(key);
       if (existing) {
         existing.net = existing.net.plus(signed);
@@ -121,8 +122,7 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
     const amount = new Decimal(a.amount);
     const fee = new Decimal(a.fee);
     const signedAmount = signedAmountFor(a, amount);
-    const taxForThis =
-      a.activityType === 'TAX' ? amount : new Decimal(0);
+    const taxForThis = a.activityType === 'TAX' ? amount : new Decimal(0);
     const roll = cashMap.get(cur) ?? {
       currency: cur,
       totalAbs: new Decimal(0),

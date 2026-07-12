@@ -11,11 +11,7 @@
  */
 
 import { Decimal } from 'decimal.js';
-import {
-  FLATEX_ACCOUNT_ISIN,
-  MONEY_MARKET_FUND_ISIN,
-  type DegiroRow,
-} from '../domain/degiro-row';
+import { FLATEX_ACCOUNT_ISIN, MONEY_MARKET_FUND_ISIN, type DegiroRow } from '../domain/degiro-row';
 import { tryParseDegiroDecimal } from '../parser/parse-decimal';
 import type { SkipReason } from '../domain/skip-reason';
 

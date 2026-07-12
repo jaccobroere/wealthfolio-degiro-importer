@@ -26,7 +26,9 @@ describe('mapOrderGroup', () => {
   });
 
   it('merges broker fees and preserves accrued interest provenance', () => {
-    const { rows } = parseDegiroCsv(readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'));
+    const { rows } = parseDegiroCsv(
+      readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'),
+    );
     // Group rows by orderId manually for a single localized order.
     const groupRows = rows.filter((r) => r.orderId === 'ord-localized-0001');
     const result = mapOrderGroup(groupRows, 0);

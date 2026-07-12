@@ -8,11 +8,7 @@
 
 import { Decimal } from 'decimal.js';
 import type { DegiroRow } from '../domain/degiro-row';
-import {
-  type ActivityDraft,
-  type GroupProvenance,
-  cashSymbol,
-} from '../domain/activity-draft';
+import { type ActivityDraft, type GroupProvenance, cashSymbol } from '../domain/activity-draft';
 import { changeAmount, classifyRow, parseTradeDescription } from './classify-row';
 import { tryParseDegiroDecimal } from '../parser/parse-decimal';
 import { toIsoDate } from '../parser/parse-date';

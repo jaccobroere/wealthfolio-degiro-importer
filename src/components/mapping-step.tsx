@@ -31,7 +31,10 @@ export interface MappingStepProps {
   /** Whether a search is in progress for a symbol. */
   searchingFor: string | null;
   /** Last search results for a symbol (for manual confirmation). */
-  searchResults: { symbol: string; results: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] } | null;
+  searchResults: {
+    symbol: string;
+    results: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[];
+  } | null;
   /** Whether saved mappings are being loaded. */
   loadingMappings: boolean;
   /** Continue to review (only enabled when all symbols resolved). */
@@ -41,10 +44,25 @@ export interface MappingStepProps {
 }
 
 export function MappingStep(props: MappingStepProps): ReactElement {
-  const { accounts, accountId, onSelectAccount, instrumentSymbols, symbolResolutions, onSearchSymbol, onConfirmSymbol, searchingFor, searchResults, loadingMappings, onContinue, onBack } = props;
+  const {
+    accounts,
+    accountId,
+    onSelectAccount,
+    instrumentSymbols,
+    symbolResolutions,
+    onSearchSymbol,
+    onConfirmSymbol,
+    searchingFor,
+    searchResults,
+    loadingMappings,
+    onContinue,
+    onBack,
+  } = props;
 
   const allResolved = instrumentSymbols.every((s) => symbolResolutions[s]?.status === 'resolved');
-  const unresolvedCount = instrumentSymbols.filter((s) => symbolResolutions[s]?.status !== 'resolved').length;
+  const unresolvedCount = instrumentSymbols.filter(
+    (s) => symbolResolutions[s]?.status !== 'resolved',
+  ).length;
 
   return (
     <div className="space-y-6">
@@ -121,14 +139,25 @@ interface SymbolRowProps {
   onSearch: () => void;
   onConfirm: (resultIndex: number) => void;
   searching: boolean;
-  searchResults: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] | null;
+  searchResults:
+    { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] | null;
 }
 
-function SymbolRow({ symbol, resolution, onSearch, onConfirm, searching, searchResults }: SymbolRowProps): ReactElement {
+function SymbolRow({
+  symbol,
+  resolution,
+  onSearch,
+  onConfirm,
+  searching,
+  searchResults,
+}: SymbolRowProps): ReactElement {
   const [showResults, setShowResults] = useState(false);
 
   return (
-    <div className="border border-border rounded-md p-3 space-y-2" data-testid={`symbol-row-${symbol}`}>
+    <div
+      className="border border-border rounded-md p-3 space-y-2"
+      data-testid={`symbol-row-${symbol}`}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="text-sm font-medium font-mono truncate">{symbol}</p>
@@ -144,7 +173,11 @@ function SymbolRow({ symbol, resolution, onSearch, onConfirm, searching, searchR
           disabled={searching}
           data-testid={`search-btn-${symbol}`}
         >
-          {searching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+          {searching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Search className="h-4 w-4" />
+          )}
           Search
         </Button>
       </div>
@@ -167,7 +200,9 @@ function SymbolRow({ symbol, resolution, onSearch, onConfirm, searching, searchR
             >
               <span className="font-mono">{r.symbol}</span>
               <span className="text-muted-foreground"> — {r.exchange}</span>
-              {r.exchangeMic ? <span className="text-muted-foreground"> ({r.exchangeMic})</span> : null}
+              {r.exchangeMic ? (
+                <span className="text-muted-foreground"> ({r.exchangeMic})</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -215,6 +250,10 @@ function ResolutionBadge({ resolution }: { resolution: SymbolResolution }): Reac
         </Badge>
       );
     default:
-      return <Badge variant="secondary" className="mt-1">Pending</Badge>;
+      return (
+        <Badge variant="secondary" className="mt-1">
+          Pending
+        </Badge>
+      );
   }
 }

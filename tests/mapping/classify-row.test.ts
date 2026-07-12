@@ -28,7 +28,9 @@ describe('classifyRow', () => {
   });
 
   it('classifies fees, taxes, accrued interest, FX', () => {
-    expect(classifyRow(row({ description: 'DEGIRO Transactiekosten en/of kosten van derden' })).kind).toBe('TRADE_FEE');
+    expect(
+      classifyRow(row({ description: 'DEGIRO Transactiekosten en/of kosten van derden' })).kind,
+    ).toBe('TRADE_FEE');
     expect(classifyRow(row({ description: 'Dividendbelasting' })).kind).toBe('TAX');
     expect(classifyRow(row({ description: 'Transactiebelasting' })).kind).toBe('TAX');
     expect(classifyRow(row({ description: 'Meegekochte Rente' })).kind).toBe('ACCRUED_INTEREST');
@@ -41,14 +43,24 @@ describe('classifyRow', () => {
     expect(classifyRow(row({ description: 'iDEAL deposit' })).kind).toBe('DEPOSIT');
     expect(classifyRow(row({ description: 'flatex Storting' })).kind).toBe('DEPOSIT');
     // "terugstorting" must NOT match "storting".
-    expect(classifyRow(row({ description: 'flatex terugstorting' })).kind).toMatchObject({ kind: 'KNOWN_SKIP' });
+    expect(classifyRow(row({ description: 'flatex terugstorting' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+    });
     // bare terugstorting negative = withdrawal
-    expect(classifyRow(row({ description: 'Terugstorting', changeAmountRaw: '-100,00' })).kind).toBe('WITHDRAWAL');
+    expect(
+      classifyRow(row({ description: 'Terugstorting', changeAmountRaw: '-100,00' })).kind,
+    ).toBe('WITHDRAWAL');
   });
 
   it('classifies processed flatex withdrawal by sign', () => {
-    expect(classifyRow(row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '-500,00' })).kind).toBe('WITHDRAWAL');
-    expect(classifyRow(row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '500,00' })).kind).toMatchObject({
+    expect(
+      classifyRow(row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '-500,00' }))
+        .kind,
+    ).toBe('WITHDRAWAL');
+    expect(
+      classifyRow(row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '500,00' }))
+        .kind,
+    ).toMatchObject({
       kind: 'KNOWN_SKIP',
       reason: 'positive-reversal',
     });
@@ -56,24 +68,57 @@ describe('classifyRow', () => {
 
   it('classifies income and fees', () => {
     expect(classifyRow(row({ description: 'Dividend' })).kind).toBe('DIVIDEND');
-    expect(classifyRow(row({ description: 'Flatex Interest', changeAmountRaw: '-0,41' })).kind).toBe('INTEREST');
-    expect(classifyRow(row({ description: 'Flatex Interest Income', changeAmountRaw: '0,00' })).kind).toBe('INTEREST');
-    expect(classifyRow(row({ description: 'DEGIRO Aansluitingskosten 2026 (Xetra - XET)' })).kind).toBe('FEE');
+    expect(
+      classifyRow(row({ description: 'Flatex Interest', changeAmountRaw: '-0,41' })).kind,
+    ).toBe('INTEREST');
+    expect(
+      classifyRow(row({ description: 'Flatex Interest Income', changeAmountRaw: '0,00' })).kind,
+    ).toBe('INTEREST');
+    expect(
+      classifyRow(row({ description: 'DEGIRO Aansluitingskosten 2026 (Xetra - XET)' })).kind,
+    ).toBe('FEE');
     expect(classifyRow(row({ description: 'Service fee' })).kind).toBe('FEE');
   });
 
   it('applies the narrow known-skip allow-list', () => {
-    expect(classifyRow(row({ description: 'DEGIRO Cash Sweep Transfer' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'cash-sweep' });
-    expect(classifyRow(row({ description: 'Overboeking naar uw geldrekening bij FlatexDEGIRO bank: 1.000,00 EUR' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'flatex-internal-transfer' });
-    expect(classifyRow(row({ description: 'Reservation iDEAL' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'reservation-hold' });
-    expect(classifyRow(row({ description: 'Productwijziging : Koop 1 @ 10,00 EUR' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'isin-rename' });
-    expect(classifyRow(row({ description: 'Verrekening welkomstactie' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'promotional-credit' });
-    expect(classifyRow(row({ description: 'Coupon' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'cash-equivalent-coupon' });
-    expect(classifyRow(row({ description: 'Rente' })).kind).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'account-interest-bookkeeping' });
+    expect(classifyRow(row({ description: 'DEGIRO Cash Sweep Transfer' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+      reason: 'cash-sweep',
+    });
+    expect(
+      classifyRow(
+        row({
+          description: 'Overboeking naar uw geldrekening bij FlatexDEGIRO bank: 1.000,00 EUR',
+        }),
+      ).kind,
+    ).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'flatex-internal-transfer' });
+    expect(classifyRow(row({ description: 'Reservation iDEAL' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+      reason: 'reservation-hold',
+    });
+    expect(
+      classifyRow(row({ description: 'Productwijziging : Koop 1 @ 10,00 EUR' })).kind,
+    ).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'isin-rename' });
+    expect(classifyRow(row({ description: 'Verrekening welkomstactie' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+      reason: 'promotional-credit',
+    });
+    expect(classifyRow(row({ description: 'Coupon' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+      reason: 'cash-equivalent-coupon',
+    });
+    expect(classifyRow(row({ description: 'Rente' })).kind).toMatchObject({
+      kind: 'KNOWN_SKIP',
+      reason: 'account-interest-bookkeeping',
+    });
   });
 
   it('skips the money-market fund by ISIN', () => {
-    expect(classifyRow(row({ description: 'Koersverandering geldmarktfonds (EUR)', isin: 'LU1959429272' })).kind).toMatchObject({
+    expect(
+      classifyRow(
+        row({ description: 'Koersverandering geldmarktfonds (EUR)', isin: 'LU1959429272' }),
+      ).kind,
+    ).toMatchObject({
       kind: 'KNOWN_SKIP',
       reason: 'money-market-fund',
     });
