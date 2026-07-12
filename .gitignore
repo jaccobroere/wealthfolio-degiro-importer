@@ -1,12 +1,34 @@
+# Dependencies
 node_modules/
-dist/
-*.zip
 
-# Local test data — never commit personal financial exports
-Account*.csv
+# Build output
+dist/
+
+# Release artifacts
+artifacts/*.zip
+
+# Coverage
+coverage/
+
+# Local-only work directories (never commit personal data)
+/.local/
+/private-fixtures/
+/local-fixtures/
+
+# Personal / real broker statements — never commit
+/Account.csv
+/*.personal.csv
+
+# Environment files (only the committed .env.acceptance.example is tracked)
+.env*
+!.env.acceptance.example
+
+# Editor / OS noise
+.DS_Store
+*.log
 
 # Wealthfolio source reference (local dev only)
 context/
 
-# Claude Code local config
+# Agent local config
 .claude/

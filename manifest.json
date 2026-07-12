@@ -1,35 +1,46 @@
 {
   "id": "degiro-importer",
-  "name": "DeGiro Importer",
-  "version": "1.0.1",
-  "sdkVersion": "3.3.0",
-  "description": "Import account statements from DeGiro broker. Supports buys, sells, dividends, deposits, withdrawals, fees and taxes.",
-  "author": "shuisman",
-  "main": "addon.js",
+  "name": "DEGIRO Importer",
+  "version": "1.1.0",
+  "sdkVersion": "3.6.1",
+  "minWealthfolioVersion": "3.6.1",
+  "description": "Import account statements from DEGIRO. Supports buys, sells, dividends, taxes, deposits, withdrawals, fees and interest, with explicit symbol review and duplicate-safe imports.",
+  "author": "shuisman; port maintained by Jacco Broere",
+  "main": "dist/addon.js",
+  "homepage": "https://github.com/jaccobroere/wealthfolio-degiro-importer#readme",
+  "repository": "https://github.com/jaccobroere/wealthfolio-degiro-importer",
+  "license": "MIT",
+  "keywords": ["wealthfolio", "degiro", "importer", "addon", "finance"],
+  "hostDependencies": {
+    "@tanstack/react-query": "^5.90.0",
+    "@wealthfolio/addon-sdk": "^3.6.0",
+    "@wealthfolio/ui": "^3.6.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.561.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "recharts": "^3.7.0"
+  },
   "permissions": [
     {
+      "category": "ui",
+      "functions": ["sidebar.addItem", "router.add", "onDisable"],
+      "purpose": "Register the importer sidebar item and route, and clean up on disable"
+    },
+    {
       "category": "accounts",
-      "functions": [
-        { "name": "accounts.getAll", "isDeclared": true, "isDetected": false }
-      ],
+      "functions": ["getAll"],
       "purpose": "Read accounts so the user can select the import destination"
     },
     {
       "category": "activities",
-      "functions": [
-        { "name": "activities.getAll", "isDeclared": true, "isDetected": false },
-        { "name": "activities.saveMany", "isDeclared": true, "isDetected": false },
-        { "name": "activities.getImportMapping", "isDeclared": true, "isDetected": false },
-        { "name": "activities.saveImportMapping", "isDeclared": true, "isDetected": false }
-      ],
-      "purpose": "Import DeGiro activities and persist ISIN-to-ticker mappings between imports"
+      "functions": ["getAll", "checkImport", "saveMany", "getImportMapping", "saveImportMapping"],
+      "purpose": "Validate and import DEGIRO activities, detect prior imports, and persist ISIN-to-symbol mappings"
     },
     {
-      "category": "market",
-      "functions": [
-        { "name": "market.searchTicker", "isDeclared": true, "isDetected": false }
-      ],
-      "purpose": "Resolve ISINs to exchange tickers during the symbol mapping step"
+      "category": "market-data",
+      "functions": ["searchTicker"],
+      "purpose": "Resolve ISINs to exchange instruments during the explicit symbol mapping step"
     }
   ]
 }
