@@ -6,11 +6,7 @@
  * the mapping review workflow.
  */
 
-import {
-  type ActivityDraft,
-  cashSymbol,
-  isInstrumentSymbol,
-} from '../domain/activity-draft';
+import { type ActivityDraft, cashSymbol, isInstrumentSymbol } from '../domain/activity-draft';
 
 export { cashSymbol, isInstrumentSymbol };
 

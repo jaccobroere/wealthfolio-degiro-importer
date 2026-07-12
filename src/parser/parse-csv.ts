@@ -9,11 +9,7 @@
  */
 
 import Papa from 'papaparse';
-import {
-  DegiroRow,
-  FIELD_COUNT,
-  HEADER_ALIASES,
-} from '../domain/degiro-row';
+import { DegiroRow, FIELD_COUNT, HEADER_ALIASES } from '../domain/degiro-row';
 
 export class DegiroCsvError extends Error {
   constructor(message: string) {

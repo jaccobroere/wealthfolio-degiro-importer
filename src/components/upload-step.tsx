@@ -27,7 +27,11 @@ export interface UploadStepProps {
   uploadSummary: UploadSummary | null;
 }
 
-export function UploadStep({ onParsed, uploadError, uploadSummary }: UploadStepProps): ReactElement {
+export function UploadStep({
+  onParsed,
+  uploadError,
+  uploadSummary,
+}: UploadStepProps): ReactElement {
   const inputRef = useRef<HTMLInputElement>(null);
   const [localError, setLocalError] = useState<string | null>(null);
   const [parsing, setParsing] = useState(false);
@@ -88,9 +92,7 @@ export function UploadStep({ onParsed, uploadError, uploadSummary }: UploadStepP
           data-testid="file-input"
         />
         <Upload className="mx-auto h-10 w-10 text-muted-foreground mb-3" />
-        <p className="text-sm font-medium">
-          {parsing ? 'Parsing…' : 'Click to select a CSV file'}
-        </p>
+        <p className="text-sm font-medium">{parsing ? 'Parsing…' : 'Click to select a CSV file'}</p>
         <p className="text-xs text-muted-foreground mt-1">Dutch or English 12-column export</p>
       </div>
 
@@ -117,7 +119,8 @@ export function UploadStep({ onParsed, uploadError, uploadSummary }: UploadStepP
               <span>Header: {uploadSummary.headerVariant}</span>
               {uploadSummary.minDate && uploadSummary.maxDate ? (
                 <span>
-                  Date range: {formatDate(uploadSummary.minDate)} → {formatDate(uploadSummary.maxDate)}
+                  Date range: {formatDate(uploadSummary.minDate)} →{' '}
+                  {formatDate(uploadSummary.maxDate)}
                 </span>
               ) : null}
             </div>

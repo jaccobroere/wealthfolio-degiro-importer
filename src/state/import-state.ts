@@ -23,7 +23,13 @@ import type { PipelineResultWithFingerprints } from '../parser/parse-and-map';
 export type WizardStep = 'upload' | 'mapping' | 'review' | 'reconcile' | 'importing' | 'done';
 
 /** Ordered step list for the stepper UI (excludes the transient `importing`). */
-export const STEP_ORDER: readonly WizardStep[] = ['upload', 'mapping', 'review', 'reconcile', 'done'] as const;
+export const STEP_ORDER: readonly WizardStep[] = [
+  'upload',
+  'mapping',
+  'review',
+  'reconcile',
+  'done',
+] as const;
 
 /** A resolved (confirmed) instrument mapping for one source ticker/ISIN. */
 export interface ResolvedMapping {
@@ -168,9 +174,7 @@ export type ImportAction =
  * Returns row count + date range + header variant only. Never includes raw
  * rows, balances, products, or order ids.
  */
-export function computeUploadSummary(
-  pipeline: PipelineResultWithFingerprints,
-): UploadSummary {
+export function computeUploadSummary(pipeline: PipelineResultWithFingerprints): UploadSummary {
   const { batch, parsed } = pipeline;
   let minDate: string | null = null;
   let maxDate: string | null = null;
@@ -211,12 +215,7 @@ export function extractInstrumentSymbols(batch: BatchOutcome): string[] {
  * - `fatal-invalid`    — structurally invalid (blocks import).
  */
 export type ReviewCategory =
-  | 'new-valid'
-  | 'duplicate'
-  | 'known-skip'
-  | 'warning'
-  | 'requires-review'
-  | 'fatal-invalid';
+  'new-valid' | 'duplicate' | 'known-skip' | 'warning' | 'requires-review' | 'fatal-invalid';
 
 /**
  * A review row: one per source-row outcome (standalone) or per activity (group
@@ -266,9 +265,7 @@ export interface ReviewRow {
  * array lists all contributing rows). Standalone activities get their own row.
  * Known-skip, unsupported, and invalid outcomes each get their own row.
  */
-export function buildReviewRows(
-  state: ImportState,
-): ReviewRow[] {
+export function buildReviewRows(state: ImportState): ReviewRow[] {
   const { pipeline, importedFingerprints, symbolResolutions } = state;
   if (!pipeline) return [];
   const { batch, fingerprints } = pipeline;
@@ -451,7 +448,14 @@ export interface ReconciliationResiduals {
 export function computeReconciliationResiduals(state: ImportState): ReconciliationResiduals {
   const { pipeline } = state;
   if (!pipeline) {
-    return { unaccountedCount: 0, unsupportedCount: 0, invalidCount: 0, buyDraftsWithAccruedInterest: 0, pass: true, failures: [] };
+    return {
+      unaccountedCount: 0,
+      unsupportedCount: 0,
+      invalidCount: 0,
+      buyDraftsWithAccruedInterest: 0,
+      pass: true,
+      failures: [],
+    };
   }
   const { batch, reconciliation } = pipeline;
   const failures: string[] = [];
@@ -465,7 +469,9 @@ export function computeReconciliationResiduals(state: ImportState): Reconciliati
     failures.push(`${batch.summary.invalidCount} invalid row(s)`);
   }
   if (reconciliation.buyDraftsWithAccruedInterestCount > 0) {
-    failures.push(`${reconciliation.buyDraftsWithAccruedInterestCount} BUY draft(s) with accrued interest (T09-gate: blocked until host representation is proven)`);
+    failures.push(
+      `${reconciliation.buyDraftsWithAccruedInterestCount} BUY draft(s) with accrued interest (T09-gate: blocked until host representation is proven)`,
+    );
   }
   return {
     unaccountedCount: reconciliation.unaccountedCount,
@@ -509,7 +515,9 @@ export function computeImportGate(state: ImportState): ImportGate {
 
     // Unresolved securities block.
     const instrumentSymbols = extractInstrumentSymbols(batch);
-    const unresolved = instrumentSymbols.filter((s) => state.symbolResolutions[s]?.status !== 'resolved');
+    const unresolved = instrumentSymbols.filter(
+      (s) => state.symbolResolutions[s]?.status !== 'resolved',
+    );
     if (unresolved.length > 0) {
       blockers.push(`${unresolved.length} unresolved security symbol(s)`);
     }
@@ -547,7 +555,13 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
         importError: null,
       };
     case 'UPLOAD_ERROR':
-      return { ...state, uploadError: action.message, pipeline: null, uploadSummary: null, step: 'upload' };
+      return {
+        ...state,
+        uploadError: action.message,
+        pipeline: null,
+        uploadSummary: null,
+        step: 'upload',
+      };
     case 'RESET_UPLOAD':
       return { ...initialImportState(), accounts: state.accounts };
     case 'ACCOUNTS_LOADED':
@@ -561,7 +575,10 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
     case 'RESOLVE_SYMBOL':
       return {
         ...state,
-        symbolResolutions: { ...state.symbolResolutions, [action.sourceTickerOrIsin]: action.resolution },
+        symbolResolutions: {
+          ...state.symbolResolutions,
+          [action.sourceTickerOrIsin]: action.resolution,
+        },
         acknowledged: false,
       };
     case 'GOTO_STEP':
@@ -573,7 +590,13 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
     case 'IMPORT_START':
       return { ...state, step: 'importing', importing: true, importError: null };
     case 'IMPORT_SUCCESS':
-      return { ...state, step: 'done', importing: false, importResult: action.result, importError: null };
+      return {
+        ...state,
+        step: 'done',
+        importing: false,
+        importResult: action.result,
+        importError: null,
+      };
     case 'IMPORT_ERROR':
       return { ...state, step: 'reconcile', importing: false, importError: action.message };
     case 'RESET':

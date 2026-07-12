@@ -31,7 +31,9 @@ describe('mapStandalone', () => {
   });
 
   it('maps a withdrawal as a positive amount with WITHDRAWAL type', () => {
-    const res = mapStandalone(row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '-500,00' }));
+    const res = mapStandalone(
+      row({ description: 'Processed Flatex Withdrawal', changeAmountRaw: '-500,00' }),
+    );
     expect(res.kind).toBe('activity');
     if (res.kind !== 'activity') return;
     expect(res.activity.activityType).toBe('WITHDRAWAL');
@@ -40,7 +42,13 @@ describe('mapStandalone', () => {
 
   it('maps a dividend with ISIN', () => {
     const res = mapStandalone(
-      row({ description: 'Dividend', isin: 'IE00B4L5Y983', product: 'X', changeAmountRaw: '20,33', changeCurrency: 'USD' }),
+      row({
+        description: 'Dividend',
+        isin: 'IE00B4L5Y983',
+        product: 'X',
+        changeAmountRaw: '20,33',
+        changeCurrency: 'USD',
+      }),
     );
     expect(res.kind).toBe('activity');
     if (res.kind !== 'activity') return;
@@ -50,14 +58,18 @@ describe('mapStandalone', () => {
   });
 
   it('skips zero-amount interest rows', () => {
-    const res = mapStandalone(row({ description: 'Flatex Interest Income', changeAmountRaw: '0,00' }));
+    const res = mapStandalone(
+      row({ description: 'Flatex Interest Income', changeAmountRaw: '0,00' }),
+    );
     expect(res.kind).toBe('known-skip');
     if (res.kind !== 'known-skip') return;
     expect(res.reason).toBe('zero-amount');
   });
 
   it('skips positive tax reversals and maps negative tax', () => {
-    expect(mapStandalone(row({ description: 'Dividendbelasting', changeAmountRaw: '1,00' })).kind).toBe('known-skip');
+    expect(
+      mapStandalone(row({ description: 'Dividendbelasting', changeAmountRaw: '1,00' })).kind,
+    ).toBe('known-skip');
     const res = mapStandalone(row({ description: 'Dividendbelasting', changeAmountRaw: '-1,00' }));
     expect(res.kind).toBe('activity');
   });

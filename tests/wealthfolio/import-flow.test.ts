@@ -15,11 +15,7 @@ import type { ActivityDraft } from '../../src/domain/activity-draft';
 import { IMPORTER_ID } from '../../src/wealthfolio/types';
 import { runImport } from '../../src/wealthfolio/import';
 import { buildDuplicateIndex } from '../../src/wealthfolio/duplicate-index';
-import {
-  createFakeHost,
-  foreignSeededActivity,
-  seededActivity,
-} from './fake-host';
+import { createFakeHost, foreignSeededActivity, seededActivity } from './fake-host';
 
 /** A minimal valid BUY draft. */
 function buyDraft(opts: Partial<ActivityDraft> = {}): ActivityDraft {

@@ -13,7 +13,10 @@
 
 import { describe, expect, it, beforeAll } from 'vitest';
 import { readFileSync, statSync } from 'node:fs';
-import { parseAndMapWithFingerprints, type PipelineResultWithFingerprints } from '../../src/parser/parse-and-map';
+import {
+  parseAndMapWithFingerprints,
+  type PipelineResultWithFingerprints,
+} from '../../src/parser/parse-and-map';
 import { EXPECTED, ACCEPTANCE_ENV } from './degiro-real-expected';
 
 function resolveAcceptanceCsv(): string {
@@ -27,7 +30,9 @@ function resolveAcceptanceCsv(): string {
   try {
     stat = statSync(raw);
   } catch {
-    throw new Error(`${ACCEPTANCE_ENV} points at a path that cannot be read. Set it to an existing regular file.`);
+    throw new Error(
+      `${ACCEPTANCE_ENV} points at a path that cannot be read. Set it to an existing regular file.`,
+    );
   }
   if (!stat.isFile()) {
     throw new Error(`${ACCEPTANCE_ENV} is not a regular file.`);
@@ -76,7 +81,9 @@ describe('DEGIRO real-statement acceptance (local release gate)', () => {
       (a) => a.activityType === 'BUY' && a.accruedInterest,
     );
     expect(buyWithAccrued.length).toBe(EXPECTED.buyDraftsWithAccruedInterest);
-    expect(result.reconciliation.accruedInterestSourceRowCount).toBe(EXPECTED.accruedInterestSourceRowCount);
+    expect(result.reconciliation.accruedInterestSourceRowCount).toBe(
+      EXPECTED.accruedInterestSourceRowCount,
+    );
     expect(result.reconciliation.buyDraftsWithAccruedInterestCount).toBe(
       EXPECTED.buyDraftsWithAccruedInterest,
     );

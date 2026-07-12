@@ -17,12 +17,7 @@ import type {
 import type { ActivityDraft } from '../domain/activity-draft';
 import { isInstrumentSymbol } from '../domain/activity-draft';
 import type { ActivityMetadataV1, PreparedDraft } from './types';
-import {
-  IMPORTER_ID,
-  IMPORTER_VERSION,
-  SOURCE_SCHEMA_VERSION,
-  SOURCE_TYPE,
-} from './types';
+import { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE } from './types';
 
 // Re-export the constants so callers don't need a second import.
 export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE };
@@ -48,7 +43,8 @@ export function buildMetadata(
   fingerprint: string,
   resolved?: AssetResolutionInput,
 ): ActivityMetadataV1 {
-  const sourceTickerOrIsin = draft.isin ?? (isInstrumentSymbol(draft.symbol) ? draft.symbol : undefined);
+  const sourceTickerOrIsin =
+    draft.isin ?? (isInstrumentSymbol(draft.symbol) ? draft.symbol : undefined);
   return {
     metadataVersion: 1,
     importerId: IMPORTER_ID,
@@ -73,10 +69,7 @@ export function buildMetadata(
  * `isDraft: true` so the host keeps the row in review until the user confirms
  * the import. Decimal strings are passed through unchanged.
  */
-export function toActivityImport(
-  prepared: PreparedDraft,
-  accountId: string,
-): ActivityImport {
+export function toActivityImport(prepared: PreparedDraft, accountId: string): ActivityImport {
   const { draft, asset } = prepared;
   return {
     accountId,
@@ -111,10 +104,7 @@ export function toActivityImport(
  * mapping exists; cash activities omit `asset`. Metadata carries the
  * non-sensitive provenance fingerprint used for duplicate detection.
  */
-export function toActivityCreate(
-  prepared: PreparedDraft,
-  accountId: string,
-): ActivityCreate {
+export function toActivityCreate(prepared: PreparedDraft, accountId: string): ActivityCreate {
   const { draft, fingerprint, asset } = prepared;
   const isInstrument = isInstrumentSymbol(draft.symbol);
   const meta = buildMetadata(draft, fingerprint, asset);
@@ -123,9 +113,7 @@ export function toActivityCreate(
     activityType: toSdkActivityType(draft.activityType),
     activityDate: draft.date,
     sourceGroupId: draft.group?.orderId,
-    asset: isInstrument
-      ? asset ?? { symbol: draft.symbol }
-      : undefined,
+    asset: isInstrument ? (asset ?? { symbol: draft.symbol }) : undefined,
     quantity: draft.quantity || undefined,
     unitPrice: draft.unitPrice || undefined,
     amount: draft.amount || undefined,

@@ -48,10 +48,12 @@ describe('parseDegiroCsv', () => {
   });
 
   it('strips a UTF-8 BOM', () => {
-    const bom = '\uFEFF' + [
-      'Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id',
-      '02-01-2026,09:00,02-01-2026,,,iDEAL storting,,EUR,"1000,00",EUR,"1000,00",',
-    ].join('\n');
+    const bom =
+      '\uFEFF' +
+      [
+        'Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id',
+        '02-01-2026,09:00,02-01-2026,,,iDEAL storting,,EUR,"1000,00",EUR,"1000,00",',
+      ].join('\n');
     const { rows, headerVariant } = parseDegiroCsv(bom);
     expect(headerVariant).toBe('dutch');
     expect(rows).toHaveLength(1);
@@ -60,8 +62,16 @@ describe('parseDegiroCsv', () => {
 
 describe('detectHeaderVariant', () => {
   it('recognizes Dutch and English headers', () => {
-    expect(detectHeaderVariant('Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id'.split(','))).toBe('dutch');
-    expect(detectHeaderVariant('Date,Time,Value date,Product,ISIN,Description,FX,Change,,Balance,,Order Id'.split(','))).toBe('english');
+    expect(
+      detectHeaderVariant(
+        'Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id'.split(','),
+      ),
+    ).toBe('dutch');
+    expect(
+      detectHeaderVariant(
+        'Date,Time,Value date,Product,ISIN,Description,FX,Change,,Balance,,Order Id'.split(','),
+      ),
+    ).toBe('english');
   });
   it('rejects unknown headers', () => {
     expect(detectHeaderVariant('foo,bar,baz'.split(','))).toBeNull();

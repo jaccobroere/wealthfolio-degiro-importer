@@ -41,7 +41,13 @@ function fakeResult(opts: Partial<SymbolSearchResult>): SymbolSearchResult {
 }
 
 function emptyMapping(accountId = 'acct-1'): ImportMappingData {
-  return { accountId, fieldMappings: {}, activityMappings: {}, symbolMappings: {}, accountMappings: {} };
+  return {
+    accountId,
+    fieldMappings: {},
+    activityMappings: {},
+    symbolMappings: {},
+    accountMappings: {},
+  };
 }
 
 describe('DEGIRO adapter: symbol mappings', () => {
@@ -57,7 +63,11 @@ describe('DEGIRO adapter: symbol mappings', () => {
       ...emptyMapping(),
       symbolMappings: {
         'revolut-importer::US0378331005': JSON.stringify({ symbol: 'AAPL', exchangeMic: 'XNAS' }),
-        [`${IMPORTER_ID}::US0378331005`]: JSON.stringify({ symbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+        [`${IMPORTER_ID}::US0378331005`]: JSON.stringify({
+          symbol: 'AAPL',
+          exchangeMic: 'XNAS',
+          providerId: 'yahoo',
+        }),
       },
     };
     const read = readSavedMappings(mapping);
@@ -80,7 +90,9 @@ describe('DEGIRO adapter: symbol mappings', () => {
     const identity = { symbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' };
     const saved = new Map([['US0378331005', identity]]);
     // Search now returns a different instrument.
-    const results = [fakeResult({ canonicalSymbol: 'MSFT', exchangeMic: 'XNAS', providerId: 'yahoo' })];
+    const results = [
+      fakeResult({ canonicalSymbol: 'MSFT', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+    ];
     const outcome = resolveSymbol('US0378331005', saved, results);
     expect(outcome.status).toBe('blocked');
   });
@@ -107,7 +119,9 @@ describe('DEGIRO adapter: symbol mappings', () => {
 
   it('single unambiguous search result resolves when no saved mapping exists', () => {
     const saved = new Map<string, { symbol: string; exchangeMic?: string; providerId?: string }>();
-    const results = [fakeResult({ canonicalSymbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' })];
+    const results = [
+      fakeResult({ canonicalSymbol: 'AAPL', exchangeMic: 'XNAS', providerId: 'yahoo' }),
+    ];
     const outcome = resolveSymbol('US0378331005', saved, results);
     expect(outcome.status).toBe('resolved');
     if (outcome.status === 'resolved') {

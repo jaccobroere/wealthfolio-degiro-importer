@@ -34,16 +34,23 @@ describe('parseAndMap — upstream example fixture (golden)', () => {
 });
 
 describe('parseAndMap — localized-quantities fixture (the bug fix)', () => {
-  const { batch } = parseAndMap(readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'));
+  const { batch } = parseAndMap(
+    readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'),
+  );
 
   it('produces exactly four BUY activities with corrected quantities', () => {
     expect(batch.summary.byActivityType.BUY).toBe(4);
-    const qtys = batch.activities.filter((a) => a.activityType === 'BUY').map((a) => a.quantity).sort();
+    const qtys = batch.activities
+      .filter((a) => a.activityType === 'BUY')
+      .map((a) => a.quantity)
+      .sort();
     expect(qtys).toEqual(['1771', '1861', '2707', '7117']);
   });
 
   it('preserves accrued interest on all four BUY drafts', () => {
-    const withAccrued = batch.activities.filter((a) => a.activityType === 'BUY' && a.accruedInterest);
+    const withAccrued = batch.activities.filter(
+      (a) => a.activityType === 'BUY' && a.accruedInterest,
+    );
     expect(withAccrued).toHaveLength(4);
   });
 
@@ -65,7 +72,9 @@ describe('parseAndMap — unknown-type fixture (blocks, never auto-skip)', () =>
 
 describe('parseAndMap — overlap fixture (overlap detection, not silent merge)', () => {
   it('preserves both identical dividends as distinct events and flags an overlap cluster', async () => {
-    const result = await parseAndMapWithFingerprints(readFileSync(join(FIXTURES, 'degiro-overlap.csv'), 'utf-8'));
+    const result = await parseAndMapWithFingerprints(
+      readFileSync(join(FIXTURES, 'degiro-overlap.csv'), 'utf-8'),
+    );
     // Idempotity fingerprints are unique per source row → zero within-batch collisions.
     expect(result.hasFingerprintCollision).toBe(false);
     // The two economically identical dividends share a coarser overlap key.

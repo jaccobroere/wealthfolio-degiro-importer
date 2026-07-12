@@ -26,12 +26,17 @@
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
     "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "inspect:csv": "tsx scripts/inspect-csv.ts",
     "acceptance:local": "vitest run -c vitest.acceptance.config.ts",
-    "verify": "echo 'pnpm verify: wired in T08 (format/lint/type-check/test/build/fixture/manifest/package validation)' && exit 1",
-    "verify:release": "echo 'pnpm verify:release: wired in T08 (verify + real-statement acceptance + deterministic ZIP/checksum)' && exit 1"
+    "check:fixtures": "tsx scripts/check-fixtures.ts",
+    "validate:manifest": "tsx scripts/validate-manifest.ts",
+    "package:addon": "sh scripts/package-addon.sh",
+    "validate:package": "tsx scripts/validate-package.ts",
+    "verify": "pnpm format && pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
+    "verify:release": "sh scripts/verify-release.sh"
   },
   "dependencies": {
     "decimal.js": "10.6.0",

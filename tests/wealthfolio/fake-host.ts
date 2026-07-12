@@ -83,7 +83,19 @@ function toDetails(activity: Activity): ActivityDetails {
 /** Build a fake `HostAPI` with in-memory state and call recording. */
 export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   const accounts = options.accounts ?? [
-    { id: 'acct-1', name: 'DEGIRO', accountType: 'SECURITIES' as never, balance: 0, currency: 'EUR', isDefault: true, isActive: true, isArchived: false, trackingMode: 'TRANSACTIONS', createdAt: new Date(), updatedAt: new Date() },
+    {
+      id: 'acct-1',
+      name: 'DEGIRO',
+      accountType: 'SECURITIES' as never,
+      balance: 0,
+      currency: 'EUR',
+      isDefault: true,
+      isActive: true,
+      isArchived: false,
+      trackingMode: 'TRANSACTIONS',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
   ];
   const storedActivities: ActivityDetails[] = [...(options.activities ?? [])];
   const saveManyCalls: RecordedSaveMany[] = [];
@@ -96,8 +108,12 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       return storedActivities.filter((a) => a.accountId === accountId);
     },
     search: async () => ({ data: [], meta: { totalRowCount: 0 } }),
-    create: async () => { throw new Error('not used'); },
-    update: async () => { throw new Error('not used'); },
+    create: async () => {
+      throw new Error('not used');
+    },
+    update: async () => {
+      throw new Error('not used');
+    },
     saveMany: async (request: ActivityBulkMutationRequest): Promise<ActivityBulkMutationResult> => {
       saveManyCalls.push({ request, callCount: saveManyCalls.length + 1 });
       if (options.saveManyError) throw options.saveManyError;
@@ -118,7 +134,8 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           accountId: c.accountId,
           activityType: c.activityType,
           status: 'POSTED',
-          activityDate: typeof c.activityDate === 'string' ? c.activityDate : c.activityDate.toISOString(),
+          activityDate:
+            typeof c.activityDate === 'string' ? c.activityDate : c.activityDate.toISOString(),
           quantity: c.quantity?.toString() ?? null,
           unitPrice: c.unitPrice?.toString() ?? null,
           amount: c.amount?.toString() ?? null,
@@ -135,14 +152,27 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       }
       return { created, updated: [], deleted: [], createdMappings: [], errors };
     },
-    import: async () => { throw new Error('not used'); },
+    import: async () => {
+      throw new Error('not used');
+    },
     checkImport: async (activities: ActivityImport[]): Promise<ActivityImport[]> => {
       if (options.checkImportError) throw options.checkImportError;
       // Pass-through: mark all as valid (the adapter re-checks isValid).
       return activities.map((a) => ({ ...a, isValid: a.isValid ?? true }));
     },
-    getImportMapping: async (_accountId: string, _contextKind?: string): Promise<ImportMappingData> => {
-      return options.importMapping ?? { accountId: _accountId, fieldMappings: {}, activityMappings: {}, symbolMappings: {}, accountMappings: {} };
+    getImportMapping: async (
+      _accountId: string,
+      _contextKind?: string,
+    ): Promise<ImportMappingData> => {
+      return (
+        options.importMapping ?? {
+          accountId: _accountId,
+          fieldMappings: {},
+          activityMappings: {},
+          symbolMappings: {},
+          accountMappings: {},
+        }
+      );
     },
     saveImportMapping: async (mapping: ImportMappingData): Promise<ImportMappingData> => {
       savedMapping = mapping;
@@ -161,7 +191,12 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   };
 
   const api = {
-    accounts: { getAll: async () => accounts, create: async () => { throw new Error('not used'); } },
+    accounts: {
+      getAll: async () => accounts,
+      create: async () => {
+        throw new Error('not used');
+      },
+    },
     activities,
     market,
     // Unused surfaces — present so the object satisfies HostAPI structurally.

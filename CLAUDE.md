@@ -35,18 +35,18 @@ The pure core (no React / no Wealthfolio SDK) lives under `src/domain`,
 `src/reconciliation`. The legacy SDK 3.3 UI (`src/addon.tsx`, `src/components/**`,
 `src/types.ts`) is rewritten in T06.
 
-| File | Purpose |
-|---|---|
-| `src/parser/parse-csv.ts` | Raw CSV text → `DegiroRow[]` (12-col, Dutch/English headers) |
-| `src/parser/parse-decimal.ts` | `parseDegiroDecimal()` — Dutch locale (`.` thousands, `,` decimal) |
-| `src/parser/parse-date.ts` | `DD-MM-YYYY` + `HH:MM` → DST-correct ISO 8601 (Europe/Amsterdam) |
-| `src/parser/parse-and-map.ts` | End-to-end pipeline → batch + reconciliation (+ fingerprints) |
-| `src/mapping/classify-row.ts` | Row → kind / narrow skip reason; trade-description parsing |
-| `src/mapping/map-order-group.ts` | Order-id grouping: partial fills, fees, accrued interest, FX |
-| `src/mapping/map-standalone.ts` | Standalone rows → activity or known-skip |
-| `src/validation/validate-batch.ts` | Every row → one outcome; `BatchOutcome` + summary |
-| `src/duplicates/fingerprint.ts` | SHA-256 idempotity fingerprints + overlap keys |
-| `src/reconciliation/reconcile.ts` | Net positions, cash roll-ups, accrued-interest presence |
+| File                               | Purpose                                                            |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `src/parser/parse-csv.ts`          | Raw CSV text → `DegiroRow[]` (12-col, Dutch/English headers)       |
+| `src/parser/parse-decimal.ts`      | `parseDegiroDecimal()` — Dutch locale (`.` thousands, `,` decimal) |
+| `src/parser/parse-date.ts`         | `DD-MM-YYYY` + `HH:MM` → DST-correct ISO 8601 (Europe/Amsterdam)   |
+| `src/parser/parse-and-map.ts`      | End-to-end pipeline → batch + reconciliation (+ fingerprints)      |
+| `src/mapping/classify-row.ts`      | Row → kind / narrow skip reason; trade-description parsing         |
+| `src/mapping/map-order-group.ts`   | Order-id grouping: partial fills, fees, accrued interest, FX       |
+| `src/mapping/map-standalone.ts`    | Standalone rows → activity or known-skip                           |
+| `src/validation/validate-batch.ts` | Every row → one outcome; `BatchOutcome` + summary                  |
+| `src/duplicates/fingerprint.ts`    | SHA-256 idempotity fingerprints + overlap keys                     |
+| `src/reconciliation/reconcile.ts`  | Net positions, cash roll-ups, accrued-interest presence            |
 
 ---
 
@@ -113,21 +113,21 @@ Datum | Tijd | Valutadatum | Product | ISIN | Omschrijving | FX
 
 ## Transaction type mapping
 
-| Dutch description | Wealthfolio type | Notes |
-|---|---|---|
-| `Koop N @ P CCY` | `BUY` | Aggregated by Order Id |
-| `Verkoop N @ P CCY` | `SELL` | Aggregated by Order Id |
-| `Transactiekosten` | fee on trade | Merged into parent trade's `fee` field |
-| `Transactiebelasting` (negative) | `TAX` | French FTT — positive = reversal, skip |
-| `Dividendbelasting` | `TAX` | Dividend withholding tax |
-| `flatex Storting` / `iDEAL storting` | `DEPOSIT` | |
-| `Processed Flatex Withdrawal` (negative) | `WITHDRAWAL` | Positive = cancellation, skip |
-| `Dividend` | `DIVIDEND` | |
-| `Flatex Interest` | `INTEREST` | Can be negative (charged) |
-| `Service-fee` / `Aansluitingskosten` / `B.T.W` | `FEE` | |
-| Cash Sweep / Overboeking / WIJZIGING ISIN | skip | Internal noise |
-| ISIN `LU1959429272` | skip | Morgan Stanley money market fund |
-| ISIN `NLFLATEXACNT` | skip | Flatex bank account representation |
+| Dutch description                              | Wealthfolio type | Notes                                  |
+| ---------------------------------------------- | ---------------- | -------------------------------------- |
+| `Koop N @ P CCY`                               | `BUY`            | Aggregated by Order Id                 |
+| `Verkoop N @ P CCY`                            | `SELL`           | Aggregated by Order Id                 |
+| `Transactiekosten`                             | fee on trade     | Merged into parent trade's `fee` field |
+| `Transactiebelasting` (negative)               | `TAX`            | French FTT — positive = reversal, skip |
+| `Dividendbelasting`                            | `TAX`            | Dividend withholding tax               |
+| `flatex Storting` / `iDEAL storting`           | `DEPOSIT`        |                                        |
+| `Processed Flatex Withdrawal` (negative)       | `WITHDRAWAL`     | Positive = cancellation, skip          |
+| `Dividend`                                     | `DIVIDEND`       |                                        |
+| `Flatex Interest`                              | `INTEREST`       | Can be negative (charged)              |
+| `Service-fee` / `Aansluitingskosten` / `B.T.W` | `FEE`            |                                        |
+| Cash Sweep / Overboeking / WIJZIGING ISIN      | skip             | Internal noise                         |
+| ISIN `LU1959429272`                            | skip             | Morgan Stanley money market fund       |
+| ISIN `NLFLATEXACNT`                            | skip             | Flatex bank account representation     |
 
 ---
 
@@ -137,6 +137,7 @@ Datum | Tijd | Valutadatum | Product | ISIN | Omschrijving | FX
 and activity review.
 
 **Architecture:**
+
 - Parent owns `mappings: Record<string, string>` (confirmed tickers) and
   `suggestions: Record<string, SymbolSearchResult>` (pending, needs user action).
 - Each `RowEditor` auto-searches on mount via `api.market.searchTicker(isin)`.

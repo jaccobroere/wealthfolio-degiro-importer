@@ -21,7 +21,9 @@ describe('reconcile', () => {
   });
 
   it('counts accrued-interest presence on the localized fixture', () => {
-    const { batch } = parseAndMap(readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'));
+    const { batch } = parseAndMap(
+      readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'),
+    );
     const rec = reconcile(batch);
     expect(rec.accruedInterestActivityCount).toBe(4);
     expect(rec.accruedInterestSourceRowCount).toBe(4);

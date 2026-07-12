@@ -38,6 +38,7 @@ Resolved package versions (after `pnpm install`):
   fallback. (icons.ts)
 
 ## Permission facts (source: `packages/addon-sdk/src/permissions.ts`,
+
 ## `manifest.json.template`)
 
 - `permissions` is an array of `{ category, functions: string[], purpose }`.
