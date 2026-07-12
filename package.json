@@ -28,6 +28,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:e2e": "playwright test -c playwright.config.ts",
+    "test:e2e:acceptance": "playwright test -c playwright.config.ts --grep @acceptance",
     "test:watch": "vitest",
     "inspect:csv": "tsx scripts/inspect-csv.ts",
     "acceptance:local": "vitest run -c vitest.acceptance.config.ts",
@@ -35,6 +37,8 @@
     "validate:manifest": "tsx scripts/validate-manifest.ts",
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
+    "integration:up": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml up --detach --wait",
+    "integration:down": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml down --volumes --remove-orphans",
     "verify": "pnpm format && pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
   },
@@ -54,6 +58,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "1.61.1",
     "@tailwindcss/vite": "^4.1.13",
     "@tanstack/react-query": "^5.90.20",
     "@testing-library/dom": "^10.4.1",

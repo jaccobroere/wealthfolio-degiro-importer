@@ -1,0 +1,21 @@
+name: wf-degiro-addon-test
+
+services:
+  wealthfolio:
+    image: wealthfolio/wealthfolio:3.6.1@sha256:2819715df7057a46a29f30cd3c3e713df3bbe424b3a1bf7f2c92dc1dea1f84a6
+    environment:
+      # Base64 for a synthetic 32-byte key; never used outside this disposable database.
+      WF_SECRET_KEY: 'd2YtZGVnaXJvLWFkZG9uLXRlc3Qtc3ludGhldGljLWs='
+      # Synthetic password is T09-disposable-password; its Argon2id PHC hash is
+      # intentionally test-only and enables the host's add-on manager.
+      WF_AUTH_REQUIRED: 'true'
+      WF_AUTH_PASSWORD_HASH: '$$argon2id$$v=19$$m=4096,t=3,p=1$$d2ZkZWdpcm90ZXN0c2FsdCE$$iU9k23FNcdwwokZ/JVoLI6Wkjzw3/YSRDDIzugs42Cs'
+      WF_CORS_ALLOW_ORIGINS: 'http://127.0.0.1:18088'
+    ports:
+      - '127.0.0.1:${WF_DEGIRO_TEST_PORT:-18088}:8088'
+    volumes:
+      - wf-degiro-addon-test-data:/data
+
+volumes:
+  wf-degiro-addon-test-data:
+    name: wf-degiro-addon-test-data

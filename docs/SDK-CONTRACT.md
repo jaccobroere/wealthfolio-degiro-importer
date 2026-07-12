@@ -153,3 +153,18 @@ Remaining **T09-gates** (not assumed by T05; must be proven on a disposable
 - **DEGIRO accrued-interest representation**: grouped BUY drafts carrying
   accrued interest remain blocked from production import until the host
   representation is proven.
+
+## T09 disposable-host attempt (blocked)
+
+The exact release archive was SHA-256 validated and installed into a
+disposable host using image
+`wealthfolio/wealthfolio:3.6.1@sha256:2819715df7057a46a29f30cd3c3e713df3bbe424b3a1bf7f2c92dc1dea1f84a6`.
+The host displayed the installed DEGIRO sidebar item, but navigating to
+`/addon/degiro-importer` twice failed with the host message:
+`Timed out rendering add-on route 'degiro-importer'`.
+
+Consequently, no host activity API behavior, metadata round-trip,
+`saveMany` atomicity, duplicate behavior, mapping restart behavior, or
+accrued-interest representation was observed. The real-statement parse-only
+gate was not run. These remain blocking T09 gates; no release conclusion may
+be inferred from the successful installation alone.

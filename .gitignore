@@ -10,6 +10,7 @@ artifacts/SHA256SUMS
 
 # Coverage
 coverage/
+test-results/
 
 # Local-only work directories (never commit personal data)
 /.local/
