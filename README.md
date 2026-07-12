@@ -1,101 +1,66 @@
-# DeGiro Importer for Wealthfolio
+# wealthfolio-degiro-importer
 
-A [Wealthfolio](https://wealthfolio.app) addon that imports your DeGiro account
-statement CSV into Wealthfolio activities.
+A [Wealthfolio](https://github.com/wealthfolio/wealthfolio) **3.6.1** addon that
+imports DEGIRO account-statement CSV exports with explicit symbol review,
+duplicate-safe imports, and full row-level reconciliation.
 
----
+This is a port of [`shuisman/degiro-importer`](https://github.com/shuisman/degiro-importer)
+(upstream release `v1.0.1`, base commit `b6fa986a511352d9d14715425f85b197dd12efeb`,
+MIT licensed — see `NOTICE.md` and `UPSTREAM.md` for attribution and the list of
+material changes).
 
-## Features
+## Status
 
-- Imports **buys, sells, dividends, deposits, withdrawals, fees, and taxes**
-- Handles DeGiro's Dutch-locale CSV format (European numbers, `DD-MM-YYYY` dates)
-- Aggregates **partial fills** by Order ID with weighted-average price
-- Merges broker **transaction fees** into the parent trade
-- Skips noise: cash sweeps, money market fund ticks, ISIN renames
-- **Symbol mapping step**: auto-searches each ISIN via your configured market
-  data provider and asks you to confirm the ticker before importing
-- Timestamps interpreted as **Europe/Amsterdam** time (CET / CEST)
-- Saves ticker mappings per account so repeat imports skip the confirmation step
+Private. Targeted at Wealthfolio host `3.6.1`. Initial release version `1.1.0`.
+Addon id `degiro-importer`; route `/addon/degiro-importer`.
 
----
+## Requirements
 
-## Installation
+- Node `20.19.0` (see `.nvmrc`) — the scaffold pins `vite@^7.1.5`, which requires
+  Node 20.19+ or 22.12+.
+- pnpm `10.34.5` (pinned via `packageManager`).
 
-1. Download the latest `degiro-importer.zip` from
-   [Releases](../../releases/latest).
-2. Open Wealthfolio → **Settings → Addons → Install from file**.
-3. Select the downloaded zip.
-
----
-
-## Usage
-
-**Export from DeGiro**
-
-1. Log in to DeGiro.
-2. Go to **Inbox → Account statement**.
-3. Select your date range and click **Download** (CSV format).
-
-**Import into Wealthfolio**
-
-1. Open the **DeGiro Importer** addon from the Wealthfolio sidebar.
-2. Upload the CSV file.
-3. On the **Map symbols** step, review the auto-suggested ticker for each ISIN.
-   - A single unambiguous match is confirmed automatically.
-   - Multiple matches show a suggestion chip — click **✓** to accept or **✕**
-     to skip (the ISIN will import as a custom asset).
-   - Use **Accept all** to confirm all pending suggestions at once.
-   - You can also type a ticker manually in the search box.
-4. On the **Review activities** step, select the destination account.
-5. Click **Import**.
-
----
-
-## Supported transaction types
-
-| DeGiro description | Wealthfolio type |
-|---|---|
-| `Koop N @ P CCY` | BUY |
-| `Verkoop N @ P CCY` | SELL |
-| `Transactiekosten` | fee on parent trade |
-| `Transactiebelasting` (negative only) | TAX |
-| `Dividendbelasting` | TAX |
-| `flatex Storting` / `iDEAL storting` / `Storting` | DEPOSIT |
-| `Processed Flatex Withdrawal` (negative) | WITHDRAWAL |
-| `Dividend` | DIVIDEND |
-| `Flatex Interest` | INTEREST |
-| `Service-fee` / `Aansluitingskosten` / `B.T.W` | FEE |
-| Cash Sweep / Overboeking / WIJZIGING ISIN | skipped |
-
----
-
-## Building from source
+## Install dependencies
 
 ```bash
-npm install
-npm run build      # type-check + bundle → dist/addon.js
-npm run bundle     # build + zip → degiro-importer.zip
+pnpm install
 ```
 
-To smoke-test the parser without Wealthfolio:
+## Common scripts
 
 ```bash
-npx tsx test-parse.mts /path/to/Account.csv
+pnpm build          # vite build -> dist/addon.js
+pnpm dev            # vite build --watch
+pnpm type-check     # tsc --noEmit
+pnpm test           # vitest run (synthetic fixtures only)
+pnpm lint
+pnpm format
 ```
 
----
+Scripts wired in later tasks: `pnpm inspect:csv`, `pnpm acceptance:local`,
+`pnpm verify`, `pnpm verify:release`.
 
-## Contributing
+## Privacy
 
-Bug reports and pull requests are welcome. Please:
+This addon never logs raw rows, filenames, account identifiers, balances, or
+order ids. See `docs/PRIVACY.md`. Real DEGIRO statements are **never** committed;
+only the upstream synthetic `example.csv` and manually reviewed synthetic
+fixtures live in this repository.
 
-- Open an issue before starting significant work.
-- Keep changes minimal and surgical — see [AGENTS.md](AGENTS.md) for coding
-  conventions used in this project.
-- Never commit personal financial data (CSV exports).
+The local acceptance test reads a real statement through an environment variable
+only — see `.env.acceptance.example`:
 
----
+```bash
+cp .env.acceptance.example .env   # gitignored
+# edit .env to point DEGIRO_ACCEPTANCE_CSV at your real Account.csv
+```
+
+## Documentation
+
+- `docs/SDK-CONTRACT.md` — verified Wealthfolio 3.6.1 host/SDK contract.
+- `docs/PRIVACY.md` — privacy rules for code and output.
+- `NOTICE.md` / `UPSTREAM.md` — upstream attribution and material changes.
 
 ## License
 
-[MIT](LICENSE)
+MIT. Upstream copyright `(c) 2025 shuisman` is preserved in `LICENSE`.

@@ -10,11 +10,21 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
-    "jsx": "react",
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node", "react", "react-dom"]
   },
-  "include": ["src"]
+  // T02 baseline: the legacy upstream src/ targets SDK 3.3 and is replaced by
+  // the pure-core refactor in T03. It is deliberately excluded here so the
+  // toolchain (config files) type-checks cleanly today. T03 reintroduces
+  // src/** under this same strict configuration.
+  "include": ["vite.config.ts", "vitest.config.ts"],
+  "exclude": ["src/**", "dist/**", "node_modules/**", "tests/**", "scripts/**"]
 }
