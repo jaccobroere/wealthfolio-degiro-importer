@@ -1,0 +1,6 @@
+Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
+02-01-2026,09:00,02-01-2026,,,iDEAL storting,,EUR,"100,00",EUR,"100,00",
+03-01-2026,09:00,03-01-2026,Synthetic Equity,XSYNTHETIC01,"Koop 1 @ 40,00 EUR",,EUR,"-40,00",EUR,"60,00",t09-canonical-buy
+04-01-2026,09:00,04-01-2026,Synthetic Equity,XSYNTHETIC01,"Verkoop 1 @ 10,00 EUR",,EUR,"10,00",EUR,"70,00",t09-canonical-sell
+05-01-2026,09:00,05-01-2026,,,Processed Flatex Withdrawal,,EUR,"-20,00",EUR,"50,00",
+06-01-2026,09:00,06-01-2026,Synthetic Equity,XSYNTHETIC01,Dividend,,EUR,"2,00",EUR,"52,00",

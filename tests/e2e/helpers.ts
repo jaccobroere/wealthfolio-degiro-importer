@@ -6,7 +6,16 @@ import { expect, type FrameLocator, type Page } from '@playwright/test';
 export const ROOT = path.resolve(import.meta.dirname, '../..');
 export const ADDON_ZIP = path.join(ROOT, 'artifacts/wealthfolio-degiro-importer-1.1.0.zip');
 export const CASH_FIXTURE = path.join(import.meta.dirname, 'fixtures/degiro-cash-only.csv');
+export const CASH_OVERLAP_FIXTURE = path.join(
+  import.meta.dirname,
+  'fixtures/degiro-cash-overlap.csv',
+);
 export const INVALID_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-unknown-type.csv');
+export const CANONICAL_SIGNS_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-canonical-signs.csv');
+export const ACCRUED_INTEREST_FIXTURE = path.join(
+  ROOT,
+  'tests/fixtures/degiro-accrued-interest.csv',
+);
 export const ACCOUNT_NAME = 'T09 Disposable DEGIRO';
 
 export function addonFrame(page: Page): FrameLocator {
