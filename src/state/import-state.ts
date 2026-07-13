@@ -41,6 +41,14 @@ export interface ResolvedMapping {
   exchangeMic?: string;
   /** Confirmed market-data provider id (optional). */
   providerId?: string;
+  /** Host quote currency required for asset-linked activity writes. */
+  quoteCcy?: string;
+  /** Host instrument classification hint. */
+  instrumentType?: string;
+  /** Provider-native code for the explicitly confirmed result. */
+  providerSymbol?: string;
+  /** Host asset kind, when supplied by market search. */
+  kind?: string;
   /** Whether this mapping was reused from saved mappings (vs. newly confirmed). */
   fromSaved: boolean;
 }

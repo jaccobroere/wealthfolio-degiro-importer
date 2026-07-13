@@ -1,3 +1,3 @@
 Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
-02-01-2026,09:00,02-01-2026,Synthetic Bond,XSYNTHETIC02,"Koop 1 @ 100,00 EUR",,EUR,"-100,00",EUR,"-100,00",t09-accrued-buy
-02-01-2026,09:00,02-01-2026,Synthetic Bond,XSYNTHETIC02,Meegekochte Rente,,EUR,"-3,00",EUR,"-103,00",t09-accrued-buy
+02-01-2026,09:00,02-01-2026,Host-supported test instrument,US0378331005,"Koop 1 @ 100,00 EUR",,EUR,"-100,00",EUR,"-100,00",t09-accrued-buy
+02-01-2026,09:00,02-01-2026,Host-supported test instrument,US0378331005,Meegekochte Rente,,EUR,"-3,00",EUR,"-103,00",t09-accrued-buy

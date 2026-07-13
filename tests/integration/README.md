@@ -53,10 +53,11 @@ and global teardown removes the disposable volume.
 The synthetic mapping-persistence test restarts only the `wealthfolio` service
 without deleting the named disposable volume, then global teardown removes the
 entire project. It saves a mapping configuration only—never an asset or an
-activity—and proves the host returns it after restart. The canonical-cash and
-accrued-interest fixtures intentionally remain blocked when the disposable
-host returns no market-data result; the suite does not invent an asset to force
-those write paths.
+activity—and proves the host returns it after restart. The accrued-interest
+fixture explicitly selects a returned canonical identity for a generic
+host-supported test instrument, but remains gated because the source-confirmed
+valuation-history response returned no entries for the installed-importer
+synthetic scenario.
 
 Before any browser proof, validate the exact release archive
 `artifacts/wealthfolio-degiro-importer-1.1.0.zip` against
