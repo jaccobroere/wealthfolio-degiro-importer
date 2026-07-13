@@ -11,6 +11,10 @@ export const CASH_OVERLAP_FIXTURE = path.join(
   import.meta.dirname,
   'fixtures/degiro-cash-overlap.csv',
 );
+export const CASH_BATCH_PROBE_FIXTURE = path.join(
+  import.meta.dirname,
+  'fixtures/degiro-cash-batch-probe.csv',
+);
 export const INVALID_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-unknown-type.csv');
 export const CANONICAL_SIGNS_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-canonical-signs.csv');
 export const ACCRUED_INTEREST_FIXTURE = path.join(
