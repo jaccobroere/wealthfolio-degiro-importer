@@ -1,4 +1,5 @@
 import { existsSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { posix } from 'node:path';
 
 type Manifest = {
@@ -66,6 +67,13 @@ if (process.argv.includes('--print-runtime-files')) {
 if (manifest.version !== packageJson.version) fail('package and manifest versions disagree');
 if (manifest.main !== 'dist/addon.js') fail('manifest main must be dist/addon.js');
 if (!existsSync(zipPath)) fail(`missing ${zipPath}`);
+const sumsPath = 'artifacts/SHA256SUMS';
+if (!existsSync(sumsPath)) fail('missing artifacts/SHA256SUMS');
+const checksum = createHash('sha256').update(readFileSync(zipPath)).digest('hex');
+if (
+  !readFileSync(sumsPath, 'utf8').includes(`${checksum}  ${zipPath.slice('artifacts/'.length)}\n`)
+)
+  fail('SHA256SUMS does not match the ZIP');
 const expected = ['README.md', 'manifest.json', ...runtime].sort();
 const entries = readZipEntries(zipPath);
 if (entries.length > 256) fail('archive contains more than 256 entries');

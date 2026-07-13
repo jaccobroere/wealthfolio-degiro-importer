@@ -44,7 +44,7 @@ describe('parseAndMap — localized-quantities fixture (the bug fix)', () => {
       .filter((a) => a.activityType === 'BUY')
       .map((a) => a.quantity)
       .sort();
-    expect(qtys).toEqual(['1771', '1861', '2707', '7117']);
+    expect(qtys).toEqual(['1234', '1750', '2506', '6408']);
   });
 
   it('preserves accrued interest on all four BUY drafts', () => {

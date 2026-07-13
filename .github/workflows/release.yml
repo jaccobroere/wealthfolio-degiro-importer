@@ -1,36 +1,97 @@
-name: Release
+name: Release DEGIRO
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*.*.*'
 
 permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  release:
+    runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - name: Checkout the full tagged history
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          node-version: 22
-          cache: npm
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.ref }}
+
+      - name: Set up Node 20.19
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 20.19.0
+          cache: pnpm
+
+      - name: Validate tag, ancestry, and versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag_sha="$(git rev-parse "refs/tags/$tag^{commit}")"
+          [[ "$tag_sha" == "$(git rev-parse HEAD)" ]]
+          git fetch origin main --no-tags
+          git merge-base --is-ancestor "$tag_sha" origin/main
+          package_version="$(node -p "require('./package.json').version")"
+          manifest_version="$(node -p "require('./manifest.json').version")"
+          [[ "$package_version" == "${tag#v}" && "$manifest_version" == "$package_version" ]]
+          test -f "docs/releases/$package_version.md"
+          attestation_version="$(node -p "require('./release/attestation.json').version")"
+          [[ "$attestation_version" == "$package_version" ]]
+
+      - name: Install pinned pnpm
+        run: corepack enable && corepack prepare pnpm@10.34.5 --activate
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
-      - name: Build
-        run: npm run build
+      # Real-statement acceptance is a private pre-tag gate and is deliberately
+      # not run in GitHub Actions. CI uses synthetic fixtures only.
+      - name: Run synthetic verification and privacy/history gate
+        run: pnpm verify
 
-      - name: Package
-        run: zip -r degiro-importer.zip dist/ manifest.json README.md
+      - name: Build twice and validate deterministic release
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_name="$(node -p "require('./package.json').name")"
+          package_version="$(node -p "require('./package.json').version")"
+          pnpm clean
+          pnpm build
+          pnpm package:addon
+          cp "artifacts/$package_name-$package_version.zip" /tmp/release-one.zip
+          cp artifacts/SHA256SUMS /tmp/release-one.SHA256SUMS
+          pnpm clean
+          pnpm build
+          pnpm package:addon
+          cmp /tmp/release-one.zip "artifacts/$package_name-$package_version.zip"
+          cmp /tmp/release-one.SHA256SUMS artifacts/SHA256SUMS
+          pnpm validate:package
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: degiro-importer.zip
-          generate_release_notes: true
+      - name: Validate sanitized attestation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('fs');
+          const crypto = require('crypto');
+          const a = JSON.parse(fs.readFileSync('release/attestation.json'));
+          const p = JSON.parse(fs.readFileSync('package.json'));
+          const zip = 'artifacts/' + p.name + '-' + p.version + '.zip';
+          if (a.repository !== p.name || a.version !== p.version || a.releaseCommit !== require('child_process').execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim() || a.zipFilename !== zip.slice(10)) process.exit(1);
+          if (a.zipSha256 !== crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex') || a.localAcceptancePassed !== true || a.disposableHostTestsPassed !== true) process.exit(1);
+          if (Object.keys(a).some((key) => !['repository','version','releaseCommit','zipFilename','zipSha256','localAcceptancePassed','disposableHostTestsPassed'].includes(key))) process.exit(1);
+          NODE
+
+      - name: Refuse an existing release
+        shell: bash
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then echo "Release already exists." >&2; exit 1; fi
+
+      - name: Publish immutable assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" "artifacts/wealthfolio-degiro-importer-$(node -p "require('./package.json').version").zip" artifacts/SHA256SUMS --title "${GITHUB_REF_NAME}" --notes-file "docs/releases/$(node -p "require('./package.json').version").md"

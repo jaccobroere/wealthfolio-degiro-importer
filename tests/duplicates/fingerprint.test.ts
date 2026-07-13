@@ -36,7 +36,7 @@ describe('fingerprint', () => {
     expect(h).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it('normalizes decimal strings so 1861 and 1861 collide, but differs by amount', async () => {
+  it('normalizes decimal strings consistently while preserving amount differences', async () => {
     const a = standaloneDividend({ amount: '10' });
     const b = standaloneDividend({ amount: '10.0' }); // same value, trailing zero
     const c = standaloneDividend({ amount: '11' });

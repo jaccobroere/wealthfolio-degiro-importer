@@ -25,7 +25,7 @@
     "clean": "rm -rf dist",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --write .",
+    "format": "prettier --check .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:e2e": "playwright test -c playwright.config.ts",
@@ -37,9 +37,11 @@
     "validate:manifest": "tsx scripts/validate-manifest.ts",
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
+    "privacy:scan": "sh scripts/privacy-scan.sh",
+    "release:attestation": "tsx scripts/write-release-attestation.ts",
     "integration:up": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml up --detach --wait",
     "integration:down": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml down --volumes --remove-orphans",
-    "verify": "pnpm format && pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
+    "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
   },
   "dependencies": {

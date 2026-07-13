@@ -34,7 +34,7 @@ describe('mapOrderGroup', () => {
     const result = mapOrderGroup(groupRows, 0);
     expect(result.activities).toHaveLength(1);
     const a = result.activities[0];
-    expect(a.quantity).toBe('1861'); // the bug fix
+    expect(a.quantity).toBe('1234'); // localized thousands separator
     expect(a.accruedInterest, 'accrued interest must be preserved as provenance').toBeDefined();
     expect(a.accruedInterest!.sourceRowNumbers).toHaveLength(1);
     expect(a.accruedInterest!.totalAmount).toBe('-1.23');
