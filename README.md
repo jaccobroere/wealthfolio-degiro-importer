@@ -11,8 +11,9 @@ material changes).
 
 ## Status
 
-Private. Targeted at Wealthfolio host `3.6.1`. Initial release version `1.1.0`.
-Addon id `degiro-importer`; route `/addon/degiro-importer`.
+Targeted at Wealthfolio host `3.6.1`. Initial release version `1.1.0` is
+**BLOCKED** pending remaining T09 accrued-interest and host-behavior proof.
+This repository has not published that release or validated a production host.
 
 ## Requirements
 
@@ -36,21 +37,19 @@ pnpm test           # vitest run (synthetic fixtures only)
 pnpm lint
 pnpm format
 pnpm verify         # CI-safe: synthetic tests, build, privacy and ZIP validation
-pnpm verify:release # local only: requires DEGIRO_ACCEPTANCE_CSV
+pnpm verify:release # mandatory local release gate
 ```
 
-`pnpm verify` never reads a personal statement. `pnpm verify:release` is the
-mandatory local release gate: it requires `DEGIRO_ACCEPTANCE_CSV`, runs the
-summary-only acceptance suite, and creates `artifacts/wealthfolio-degiro-importer-1.1.0.zip`
-plus `artifacts/SHA256SUMS`. It does not publish, tag, or install anything.
+`pnpm verify` uses synthetic fixtures only. `pnpm verify:release` is the
+mandatory local release gate. It creates the versioned ZIP and `SHA256SUMS`,
+but does not publish, tag, or install anything.
 
-## Download and install ZIP
+## Future download and installation
 
-The ZIP is the distributable product. Download the versioned ZIP, verify it
-with `(cd artifacts && shasum -a 256 -c SHA256SUMS)`, then select that ZIP in
-Wealthfolio's add-on installer. The archive contains only the manifest, this
-README, and runtime build files; it does not contain source, tests, lockfiles,
-or statements.
+No ZIP is published while T09 is blocked. After a future approved immutable
+release, download its versioned ZIP directly, verify it against that release's
+`SHA256SUMS`, and select the verified ZIP in Wealthfolio's add-on installer.
+See `docs/INSTALL.md`, `docs/RELEASE.md`, and `docs/ROLLBACK.md`.
 
 ## Privacy
 
@@ -59,18 +58,12 @@ order ids. See `docs/PRIVACY.md`. Real DEGIRO statements are **never** committed
 only the upstream synthetic `example.csv` and manually reviewed synthetic
 fixtures live in this repository.
 
-The local acceptance test reads a real statement through an environment variable
-only — see `.env.acceptance.example`:
-
-```bash
-cp .env.acceptance.example .env   # gitignored
-# edit .env to point DEGIRO_ACCEPTANCE_CSV at your real Account.csv
-```
-
 ## Documentation
 
 - `docs/SDK-CONTRACT.md` — verified Wealthfolio 3.6.1 host/SDK contract.
 - `docs/PRIVACY.md` — privacy rules for code and output.
+- `docs/RELEASE.md` — blocked release status and future release controls.
+- `docs/INSTALL.md` / `docs/ROLLBACK.md` — future ZIP installation and safe rollback.
 - `NOTICE.md` / `UPSTREAM.md` — upstream attribution and material changes.
 
 ## License
