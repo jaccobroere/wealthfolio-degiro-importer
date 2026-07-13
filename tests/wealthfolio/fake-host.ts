@@ -80,6 +80,12 @@ function toDetails(activity: Activity): ActivityDetails {
   };
 }
 
+/** The host bulk wire DTO accepts serialized metadata and returns an object. */
+function deserializeMetadata(metadata: string | Record<string, unknown> | undefined) {
+  if (typeof metadata !== 'string') return metadata;
+  return JSON.parse(metadata) as Record<string, unknown>;
+}
+
 /** Build a fake `HostAPI` with in-memory state and call recording. */
 export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   const accounts = options.accounts ?? [
@@ -141,7 +147,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           amount: c.amount?.toString() ?? null,
           fee: c.fee?.toString() ?? null,
           currency: c.currency ?? 'EUR',
-          metadata: c.metadata as Record<string, unknown> | undefined,
+          metadata: deserializeMetadata(c.metadata),
           isUserModified: false,
           needsReview: true,
           createdAt: now,

@@ -233,4 +233,16 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(meta?.path).toBeUndefined();
     expect(meta?.statementPath).toBeUndefined();
   });
+
+  it('serializes provenance metadata for the host bulk wire DTO', async () => {
+    const host = createFakeHost();
+    await runImport(host.api, 'acct-1', [buyDraft()]);
+
+    const metadata = host.saveManyCalls[0].request.creates?.[0].metadata;
+    expect(typeof metadata).toBe('string');
+    expect(JSON.parse(metadata as string)).toMatchObject({
+      importerId: IMPORTER_ID,
+      sourceRowNumbers: [42],
+    });
+  });
 });

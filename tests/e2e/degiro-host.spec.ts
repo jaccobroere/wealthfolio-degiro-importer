@@ -35,6 +35,26 @@ test('installs the exact archive, renders repeatedly, and survives disable/re-en
 test('imports a synthetic cash-only statement and skips the same statement on re-import', async ({
   page,
 }) => {
+  const hostFailures: string[] = [];
+  const activityPosts: string[] = [];
+  page.on('response', (response) => {
+    if (response.request().method() === 'POST' && response.url().includes('/api/v1/activities/')) {
+      activityPosts.push(`${new URL(response.url()).pathname} ${response.status()}`);
+    }
+    if (response.status() < 400 || !response.url().includes('/api/v1/activities/')) return;
+    void response
+      .text()
+      .catch(() => '<response body unavailable>')
+      .then((body) => {
+        // This disposable test only records response shape and validation details;
+        // never print identifiers should a host response include them.
+        hostFailures.push(
+          `${response.status()} ${new URL(response.url()).pathname} ${body
+            .replace(/[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}/gi, '<id>')
+            .replace(/"accountId"\s*:\s*"[^"]*"/g, '"accountId":"<id>"')}`,
+        );
+      });
+  });
   await signIn(page);
   await createDisposableAccount(page);
   const frame = await openAddon(page);
@@ -50,6 +70,14 @@ test('imports a synthetic cash-only statement and skips the same statement on re
   await expect(frame.getByTestId('import-button')).toBeEnabled();
   await frame.getByTestId('import-button').click();
   await expect(frame.getByRole('heading', { name: 'Import complete' })).toBeVisible();
+  // Give the bridge response handler a microtask to capture any host rejection.
+  await page.waitForTimeout(100);
+  if (hostFailures.length > 0) throw new Error(hostFailures.join('\n'));
+  const saveMany = activityPosts.find((entry) => entry.includes('/bulk '));
+  // `runImport` awaits checkImport before it can issue this bulk request; the
+  // sandbox bridge does not expose checkImport as a separate HTTP response.
+  expect(saveMany, `activity POSTs: ${activityPosts.join(', ')}`).toBeDefined();
+  expect(saveMany!).toMatch(/ 200$/);
   await expect(frame.getByText('2 activity(ies) created successfully.')).toBeVisible();
 
   await frame.getByTestId('reset-button').click();
