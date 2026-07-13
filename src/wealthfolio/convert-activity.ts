@@ -124,6 +124,8 @@ export function toActivityCreate(prepared: PreparedDraft, accountId: string): Ac
     fee: draft.fee || undefined,
     comment: draft.comment,
     fxRate: draft.group?.fxRate || undefined,
-    metadata: meta as unknown as Record<string, unknown>,
+    // The SDK permits an object for convenience, but the 3.6.1 host bulk
+    // endpoint's wire DTO requires metadata to be a JSON string.
+    metadata: JSON.stringify(meta),
   } satisfies ActivityCreate;
 }
