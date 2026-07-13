@@ -326,6 +326,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
 
       {state.step === 'mapping' ? (
         <MappingStep
+          uploadSummary={state.uploadSummary!}
           accounts={state.accounts}
           accountId={state.accountId}
           onSelectAccount={(id) => dispatch({ type: 'SELECT_ACCOUNT', accountId: id })}
