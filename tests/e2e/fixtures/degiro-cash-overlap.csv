@@ -1,0 +1,4 @@
+Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
+02-01-2026,09:00,02-01-2026,,,iDEAL storting,,EUR,"1000,00",EUR,"1000,00",
+03-01-2026,09:00,03-01-2026,,,Processed Flatex Withdrawal,,EUR,"-250,00",EUR,"750,00",
+04-01-2026,09:00,04-01-2026,,,iDEAL storting,,EUR,"25,00",EUR,"775,00",
