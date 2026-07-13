@@ -43,6 +43,14 @@ The E2E suite proves write outcomes and duplicate behavior; the direct
 `checkImport`-before-`saveMany` call ordering remains covered by
 `tests/wealthfolio/import-flow.test.ts` until the host offers an auditable API.
 
+The synthetic mapping-persistence test restarts only the `wealthfolio` service
+without deleting the named disposable volume, then global teardown removes the
+entire project. It saves a mapping configuration only—never an asset or an
+activity—and proves the host returns it after restart. The canonical-cash and
+accrued-interest fixtures intentionally remain blocked when the disposable
+host returns no market-data result; the suite does not invent an asset to force
+those write paths.
+
 Before any browser proof, validate the exact release archive
 `artifacts/wealthfolio-degiro-importer-1.1.0.zip` against
 `artifacts/SHA256SUMS`. The harness never tests `dist/` or a

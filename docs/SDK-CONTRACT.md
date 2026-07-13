@@ -142,29 +142,60 @@ Implemented and covered by fake-host unit tests (`tests/wealthfolio/`):
 - Metadata schema v1 carries only non-sensitive provenance (no raw rows,
   balances, filenames, or paths).
 
-Remaining **T09-gates** (not assumed by T05; must be proven on a disposable
-3.6.1 host before release):
+Originally remaining **T09-gates** (not assumed by T05) included metadata
+round-trip, `saveMany` partial/atomic behavior, and accrued-interest
+representation. The disposable-host evidence below resolves the metadata gate;
+the following gates remain before release:
 
-- **Metadata round-trip**: whether `saveMany()` → `getAll()` actually persists
-  `metadata` on the real host. T05 falls back to positional correlation if
-  metadata is absent, but the metadata round-trip is the verified protocol.
 - **`saveMany` partial/atomic behavior**: whether the host applies atomically
   or partially. T05 treats `created`/`errors` as authoritative either way.
 - **DEGIRO accrued-interest representation**: grouped BUY drafts carrying
   accrued interest remain blocked from production import until the host
   representation is proven.
 
-## T09 disposable-host attempt (blocked)
+## T09 disposable-host evidence (2026-07-13)
 
-The exact release archive was SHA-256 validated and installed into a
-disposable host using image
+All observations below were made against the SHA-256-validated release archive
+in the loopback-only disposable host image
 `wealthfolio/wealthfolio:3.6.1@sha256:2819715df7057a46a29f30cd3c3e713df3bbe424b3a1bf7f2c92dc1dea1f84a6`.
-The host displayed the installed DEGIRO sidebar item, but navigating to
-`/addon/degiro-importer` twice failed with the host message:
-`Timed out rendering add-on route 'degiro-importer'`.
+`pnpm test:e2e` creates the dedicated volume, removes it in global teardown,
+and does not contact production systems.
 
-Consequently, no host activity API behavior, metadata round-trip,
-`saveMany` atomicity, duplicate behavior, mapping restart behavior, or
-accrued-interest representation was observed. The real-statement parse-only
-gate was not run. These remain blocking T09 gates; no release conclusion may
-be inferred from the successful installation alone.
+### Confirmed
+
+- The installed add-on renders repeatedly and survives disable/re-enable.
+- A synthetic cash-only statement completes `checkImport` then `saveMany`,
+  and host activity metadata round-trips through authenticated activity search.
+  Re-import creates zero rows; a one-row overlap creates one row.
+- The host accepted a synthetic **mapping configuration** at
+  `POST /api/v1/activities/import/mapping` (HTTP 200), retained it across an
+  isolated `docker compose restart wealthfolio`, and returned it from
+  `GET /api/v1/activities/import/mapping` (HTTP 200). On reopening the add-on,
+  the saved configuration was reconstructed as a `(saved)` mapping. The probe
+  never advanced to review/import, so it created neither an asset nor an
+  activity. Its fresh host market search returned HTTP 200 with `[]`; the
+  add-on's existing offline saved-mapping path performed the reconstruction.
+
+### Still blocked: safely resolved synthetic instruments
+
+- The canonical-sign fixture proves in the pure core that deposit 100, buy 40,
+  sell 10, withdrawal 20, and dividend 2 reconcile to EUR 52. Its only
+  instrument (`XSYNTHETIC01`) received the host response HTTP 200 with `[]`
+  from the market-data search. The mapping UI therefore disables continuation.
+  No synthetic asset was fabricated and no `ActivityImport`/`ActivityCreate`
+  was sent, so host cash-balance/cost-basis evidence for this scenario does
+  **not** exist.
+- The accrued-interest BUY fixture's instrument (`XSYNTHETIC02`) likewise
+  received HTTP 200 with `[]` from the host market-data search. The mapping UI
+  disables continuation before any host import validation or write. Therefore
+  there is no safely resolved host BUY from which to determine whether
+  `Meegekochte Rente` belongs in `amount`, `fee`, `tax`, or another field.
+  The core continues to preserve accrued-interest provenance and blocks the
+  import; no release conclusion is permitted.
+
+The remaining release blockers are a host-supported resolved instrument for
+the canonical-cash and accrued-interest scenarios, accrued-interest
+`ActivityImport`/`ActivityCreate` acceptance plus resulting cash/cost-basis
+evidence, and the pre-existing `saveMany` partial/atomic behavior gate. The
+opt-in real-statement test remains parse-only and is not evidence for any of
+these write gates.

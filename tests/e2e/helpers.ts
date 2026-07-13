@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
@@ -15,6 +16,10 @@ export const CANONICAL_SIGNS_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-ca
 export const ACCRUED_INTEREST_FIXTURE = path.join(
   ROOT,
   'tests/fixtures/degiro-accrued-interest.csv',
+);
+export const MAPPING_PERSISTENCE_FIXTURE = path.join(
+  import.meta.dirname,
+  'fixtures/degiro-mapping-persistence.csv',
 );
 export const ACCOUNT_NAME = 'T09 Disposable DEGIRO';
 
@@ -41,6 +46,11 @@ export async function signIn(page: Page): Promise<void> {
   // race and skip the login form. The v3.6.1 password form stays at `/` after
   // successful submission; prove the documented JSON request succeeds and the
   // form is dismissed instead of waiting for a URL redirect that never occurs.
+  // A container restart retains the disposable host's authenticated session.
+  // In that case the existing session is sufficient; do not attempt a second
+  // login against a form the host correctly does not render.
+  await page.waitForTimeout(500);
+  if ((await password.count()) === 0) return;
   await expect(password).toBeVisible();
   await password.fill('T09-disposable-password');
   const loginResponse = page.waitForResponse(
@@ -104,4 +114,25 @@ export async function openAddon(page: Page): Promise<FrameLocator> {
 
 export async function upload(frame: FrameLocator, file: string): Promise<void> {
   await frame.getByTestId('file-input').setInputFiles(file);
+}
+
+/** Restart only the isolated disposable host while retaining its named volume. */
+export function restartDisposableHost(): void {
+  const composeArgs = [
+    'compose',
+    '--project-name',
+    'wf-degiro-addon-test',
+    '--env-file',
+    'tests/integration/.env.example',
+    '-f',
+    'tests/integration/compose.yml',
+  ];
+  execFileSync('docker', [...composeArgs, 'restart', 'wealthfolio'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+  execFileSync('docker', [...composeArgs, 'up', '--detach', '--wait', 'wealthfolio'], {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
 }
