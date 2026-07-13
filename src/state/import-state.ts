@@ -57,6 +57,10 @@ export type SymbolResolution =
 export interface UploadSummary {
   /** Number of parsed data rows. */
   rowCount: number;
+  /** Number of normalized activities before account or symbol mapping. */
+  activityCount: number;
+  /** Privacy-safe normalized-activity counts, grouped by activity type. */
+  byActivityType: Record<string, number>;
   /** Earliest activity date (ISO) across the batch, or null if empty. */
   minDate: string | null;
   /** Latest activity date (ISO) across the batch, or null if empty. */
@@ -184,6 +188,8 @@ export function computeUploadSummary(pipeline: PipelineResultWithFingerprints): 
   }
   return {
     rowCount: batch.summary.sourceRowCount,
+    activityCount: batch.summary.activityCount,
+    byActivityType: { ...batch.summary.byActivityType },
     minDate,
     maxDate,
     headerVariant: parsed.headerVariant,
