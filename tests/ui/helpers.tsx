@@ -41,7 +41,7 @@ export const UNSUPPORTED_CSV = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving
 `;
 
 export const ACCRUED_INTEREST_CSV = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
-02-01-2026,10:00,02-01-2026,SYNTHETIC BOND A,IE00LCL0001,"Koop 1.861 @ 100,00 EUR",,EUR,"-1.861,00",EUR,"1.861,00",ord-localized-0001
+02-01-2026,10:00,02-01-2026,SYNTHETIC BOND A,IE00LCL0001,"Koop 1.234 @ 100,00 EUR",,EUR,"-1.234,00",EUR,"1.234,00",ord-localized-0001
 02-01-2026,10:00,02-01-2026,SYNTHETIC BOND A,IE00LCL0001,Meegekochte Rente,,EUR,"-1,23",EUR,"1.859,77",ord-localized-0001
 02-01-2026,10:00,02-01-2026,SYNTHETIC BOND A,IE00LCL0001,DEGIRO Transactiekosten en/of kosten van derden,,EUR,"-2,00",EUR,"1.857,77",ord-localized-0001
 `;

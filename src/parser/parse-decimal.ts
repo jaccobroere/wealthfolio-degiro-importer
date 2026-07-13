@@ -4,10 +4,10 @@
  * Pure core: no React, no `Wealthfolio addon SDK`.
  *
  * DEGIRO locale: `.` = thousands separator, `,` = decimal mark.
- *   "1.861"     → 1861        (THE bug: the legacy trade regex rejected the period)
- *   "2.707"     → 2707
- *   "7.117"     → 7117
- *   "1.771"     → 1771
+ *   "1.234"     → 1234        (localized thousands separator)
+ *   "2.506"     → 2506
+ *   "6.408"     → 6408
+ *   "1.750"     → 1750
  *   "119,285"   → 119.285
  *   "1.234,56"  → 1234.56
  *   "1,0920"    → 1.0920      (FX rate)

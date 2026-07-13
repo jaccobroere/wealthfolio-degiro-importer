@@ -8,10 +8,10 @@ import {
 
 describe('parseDegiroDecimal (Dutch locale: . thousands, , decimal)', () => {
   it('parses the four thousands-separated BUY quantities (the bug fix)', () => {
-    expect(parseDegiroDecimal('1.861').toString()).toBe('1861');
-    expect(parseDegiroDecimal('2.707').toString()).toBe('2707');
-    expect(parseDegiroDecimal('7.117').toString()).toBe('7117');
-    expect(parseDegiroDecimal('1.771').toString()).toBe('1771');
+    expect(parseDegiroDecimal('1.234').toString()).toBe('1234');
+    expect(parseDegiroDecimal('2.506').toString()).toBe('2506');
+    expect(parseDegiroDecimal('6.408').toString()).toBe('6408');
+    expect(parseDegiroDecimal('1.750').toString()).toBe('1750');
   });
 
   it('treats comma as the decimal mark', () => {
@@ -33,7 +33,7 @@ describe('parseDegiroDecimal (Dutch locale: . thousands, , decimal)', () => {
   it('parses plain integers and negatives', () => {
     expect(parseDegiroDecimal('14').toString()).toBe('14');
     expect(parseDegiroDecimal('-2,50').toString()).toBe('-2.5');
-    expect(parseDegiroDecimal('-1.861').toString()).toBe('-1861');
+    expect(parseDegiroDecimal('-1.234').toString()).toBe('-1234');
   });
 
   it('rejects malformed or ambiguous input', () => {
@@ -47,7 +47,7 @@ describe('parseDegiroDecimal (Dutch locale: . thousands, , decimal)', () => {
   it('tryParseDegiroDecimal returns null instead of throwing', () => {
     expect(tryParseDegiroDecimal('')).toBeNull();
     expect(tryParseDegiroDecimal('nope')).toBeNull();
-    expect(tryParseDegiroDecimal('1.861')?.toString()).toBe('1861');
+    expect(tryParseDegiroDecimal('1.234')?.toString()).toBe('1234');
   });
 
   it('keeps full precision (no float rounding)', () => {

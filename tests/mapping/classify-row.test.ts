@@ -22,7 +22,7 @@ function row(over: Partial<DegiroRow> & { description: string }): DegiroRow {
 
 describe('classifyRow', () => {
   it('classifies trades accepting Dutch thousands separator in quantity', () => {
-    expect(classifyRow(row({ description: 'Koop 1.861 @ 100,00 EUR' })).kind).toBe('BUY');
+    expect(classifyRow(row({ description: 'Koop 1.234 @ 100,00 EUR' })).kind).toBe('BUY');
     expect(classifyRow(row({ description: 'Verkoop 84 @ 122 EUR' })).kind).toBe('SELL');
     expect(classifyRow(row({ description: 'Koop 14 @ 119,285 EUR' })).kind).toBe('BUY');
   });
@@ -131,9 +131,9 @@ describe('classifyRow', () => {
 
 describe('parseTradeDescription', () => {
   it('extracts Dutch-locale quantity/price/currency', () => {
-    const info = parseTradeDescription('Koop 1.861 @ 100,00 EUR');
+    const info = parseTradeDescription('Koop 1.234 @ 100,00 EUR');
     expect(info).not.toBeNull();
-    expect(info!.quantity.toString()).toBe('1861');
+    expect(info!.quantity.toString()).toBe('1234');
     expect(info!.price.toString()).toBe('100');
     expect(info!.currency).toBe('EUR');
   });

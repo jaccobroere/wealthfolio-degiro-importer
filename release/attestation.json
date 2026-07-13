@@ -1,0 +1,9 @@
+{
+  "repository": "wealthfolio-degiro-importer",
+  "version": "1.1.0",
+  "releaseCommit": "SET_BEFORE_TAGGING",
+  "zipFilename": "wealthfolio-degiro-importer-1.1.0.zip",
+  "zipSha256": "SET_BEFORE_TAGGING",
+  "localAcceptancePassed": true,
+  "disposableHostTestsPassed": true
+}

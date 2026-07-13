@@ -16,10 +16,11 @@ test-results/
 /.local/
 /private-fixtures/
 /local-fixtures/
+/.local/
 
 # Personal / real broker statements — never commit
-/Account.csv
-/*.personal.csv
+/*.csv
+/**/*.personal.csv
 
 # Environment files (only the committed .env.acceptance.example is tracked)
 .env*

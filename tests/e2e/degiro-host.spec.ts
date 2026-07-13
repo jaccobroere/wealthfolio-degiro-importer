@@ -17,7 +17,7 @@ import {
   signIn,
   upload,
 } from './helpers';
-import { EXPECTED } from '../acceptance/degiro-real-expected';
+import { loadBaseline } from '../acceptance/load-baseline';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -508,11 +508,16 @@ test('explicitly selects a host-supported test instrument but keeps accrued-inte
   expect(searchResponses.some((entry) => entry.status === 200 && entry.resultCount > 0)).toBe(true);
 });
 
-test('@acceptance parses a personal statement only when explicitly opted in', async ({ page }) => {
+test('@acceptance parses a local statement only when explicitly opted in', async ({ page }) => {
   test.skip(
-    !process.env.DEGIRO_ACCEPTANCE_CSV,
-    'DEGIRO_ACCEPTANCE_CSV was not explicitly supplied',
+    !process.env.DEGIRO_ACCEPTANCE_CSV || !process.env.DEGIRO_ACCEPTANCE_BASELINE,
+    'Local statement and baseline were not explicitly supplied',
   );
+  const baseline = loadBaseline<{
+    sourceRowCount: number;
+    activityCount: number;
+    byActivityType: Record<string, number>;
+  }>();
   await signIn(page);
   const frame = await openAddon(page);
   const writes: string[] = [];
@@ -535,11 +540,11 @@ test('@acceptance parses a personal statement only when explicitly opted in', as
   ).toBeHidden();
   await expect(frame.getByRole('heading', { name: /Step 2.*Account/ })).toBeVisible();
   await expect(frame.getByTestId('parsed-statement-summary')).toBeVisible();
-  await expect(frame.getByTestId('parsed-row-count')).toHaveText(`${EXPECTED.sourceRowCount} rows`);
+  await expect(frame.getByTestId('parsed-row-count')).toHaveText(`${baseline.sourceRowCount} rows`);
   await expect(frame.getByTestId('parsed-activity-count')).toHaveText(
-    `${EXPECTED.activityCount} activities`,
+    `${baseline.activityCount} activities`,
   );
-  for (const [type, count] of Object.entries(EXPECTED.byActivityType)) {
+  for (const [type, count] of Object.entries(baseline.byActivityType)) {
     await expect(frame.getByTestId(`parsed-activity-type-${type}`)).toHaveText(`${type}: ${count}`);
   }
   expect(writes).toEqual([]);

@@ -25,4 +25,5 @@ done
 chmod 0644 "$stage/manifest.json" "$stage/README.md"
 touch -t 200001010000 "$stage/manifest.json" "$stage/README.md"
 (cd "$stage" && LC_ALL=C printf '%s\n' manifest.json README.md $runtime_files | LC_ALL=C sort | zip -X -q "$output" -@)
+(cd artifacts && shasum -a 256 "$(basename "$output")" > SHA256SUMS)
 echo "Packaged addon ZIP."
