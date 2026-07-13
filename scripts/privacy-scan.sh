@@ -11,6 +11,15 @@ for file in $(git ls-files); do
   if [ -f "$file" ] && LC_ALL=C grep -IEn "$patterns" "$file" >/dev/null 2>&1; then report "$file" "privacy-pattern"; fi
 done
 
+reachable=$(mktemp)
+trap 'rm -f "$reachable"' EXIT HUP INT TERM
+git rev-list --objects --all > "$reachable"
+while read -r object path; do
+  case "$path" in scripts/privacy-scan.sh) continue ;; esac
+  if [ -n "$path" ] && printf '%s\n' "$path" | LC_ALL=C grep -Eiq '(^|/)[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.csv$'; then report "$path" "uuid-source-filename"; fi
+  if git cat-file -e "$object^{blob}" 2>/dev/null && git cat-file blob "$object" 2>/dev/null | LC_ALL=C grep -IEq "$patterns"; then report "object:$object" "reachable-history-pattern"; fi
+done < "$reachable"
+
 for file in $(git ls-files '*.csv' '*.md' '*.json' '*.yml' '*.yaml' '*.ts' '*.tsx' '*.js' '*.sh' '*.toml'); do
   [ -f "$file" ] || continue
   case "$file" in tests/fixtures/*|*.csv|README.md|CHANGELOG.md|docs/*|manifest.json|package.json|release/*)
