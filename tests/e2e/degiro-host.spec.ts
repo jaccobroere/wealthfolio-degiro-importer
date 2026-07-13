@@ -379,9 +379,9 @@ test('persists a host-supported synthetic mapping configuration across a contain
     accountMappings: {},
     symbolMappings: {
       'degiro-importer::XSYNTHETIC-MAPPING-PROBE': JSON.stringify({
-        symbol: 'T09-PROBE',
+        symbol: 'SYNTH-PROBE',
         exchangeMic: 'XTEST',
-        providerId: 't09-host-proof',
+        providerId: 'synthetic-host-proof',
       }),
     },
   };
@@ -436,7 +436,7 @@ test('persists a host-supported synthetic mapping configuration across a contain
   await upload(restartedFrame, MAPPING_PERSISTENCE_FIXTURE);
   await restartedFrame.getByTestId('account-select-trigger').click();
   await restartedFrame.getByText(`${ACCOUNT_NAME} (EUR)`).click();
-  await expect(restartedFrame.getByText('T09-PROBE · XTEST (saved)')).toBeVisible();
+  await expect(restartedFrame.getByText('SYNTH-PROBE · XTEST (saved)')).toBeVisible();
   await expect(restartedFrame.getByTestId('mapping-continue')).toBeEnabled();
   await expect.poll(() => searchResponses.some((entry) => entry.resultCount === 0)).toBe(true);
   expect(searchResponses.some((entry) => entry.status === 200 && entry.resultCount === 0)).toBe(

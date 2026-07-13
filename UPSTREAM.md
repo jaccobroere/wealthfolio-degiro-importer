@@ -36,5 +36,5 @@ additions, and removal of the destructive clear path).
 ## Upstream synthetic fixture
 
 `example.csv` is the upstream-committed synthetic DEGIRO statement and is
-retained as the baseline parser fixture (moved into `tests/fixtures/` in T03).
+retained as the baseline parser fixture (moved into `tests/fixtures/`).
 It contains no real personal data.

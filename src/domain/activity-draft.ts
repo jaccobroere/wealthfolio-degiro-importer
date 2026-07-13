@@ -3,7 +3,7 @@
  *
  * No React, no `Wealthfolio addon SDK`. The shape mirrors the Wealthfolio
  * 3.6.1 `ActivityImport`/`ActivityCreate` contract closely enough that the host
- * adapter (T06/T09) can convert 1:1, but every monetary field is a decimal
+ * adapter can convert 1:1, but every monetary field is a decimal
  * STRING so arithmetic stays exact through the pure core.
  */
 
@@ -25,7 +25,7 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
 /**
  * Accrued-interest provenance for `Meegekochte Rente` rows attached to a BUY.
  *
- * T03 preserves these faithfully; T09 decides whether Wealthfolio must receive
+ * The parser preserves these faithfully; the adapter decides how Wealthfolio receives
  * the amount folded into the BUY `amount`, `fee`, or another field. Until then
  * a draft carrying accrued interest is blocked from production import.
  */

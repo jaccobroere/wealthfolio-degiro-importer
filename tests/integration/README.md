@@ -1,6 +1,6 @@
 # Disposable Wealthfolio 3.6.1 integration host
 
-This harness is exclusively for the DEGIRO add-on T09 gate. It starts the
+This harness is exclusively for the DEGIRO add-on integration gate. It starts the
 pinned `wealthfolio/wealthfolio:3.6.1` image by digest with project name
 `wf-degiro-addon-test`, one disposable named volume
 `wf-degiro-addon-test-data`, and a loopback-only port (`127.0.0.1:18088` by
@@ -8,7 +8,7 @@ default). It does not use any external Docker network, production hostname,
 volume, account, or credential.
 
 The host has one committed **synthetic, disposable** login only:
-`T09-disposable-password`. Its test-only Argon2id hash is in the Compose file
+`synthetic-test-password`. Its test-only Argon2id hash is in the Compose file
 solely because Wealthfolio requires an authenticated session to manage add-ons.
 
 ## Run

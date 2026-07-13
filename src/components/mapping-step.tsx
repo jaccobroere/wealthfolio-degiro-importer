@@ -1,5 +1,5 @@
 /**
- * Mapping step (T07, step 2/4).
+ * Mapping step.
  *
  * Selects the destination account and confirms every unseen security via
  * `ctx.api['market-data'].searchTicker(query)`. NEVER auto-accepts the first

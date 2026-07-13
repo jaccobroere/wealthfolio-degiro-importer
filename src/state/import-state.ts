@@ -1,5 +1,5 @@
 /**
- * Import wizard state machine (T07).
+ * Import wizard state machine.
  *
  * Pure state + reducer module: no React, no `@wealthfolio/addon-sdk` runtime
  * imports. The UI layer (`src/pages/importer-page.tsx`) wires this into a
@@ -220,7 +220,7 @@ export function extractInstrumentSymbols(batch: BatchOutcome): string[] {
 /**
  * Categorize a single activity draft into a review category.
  *
- * Categories (per PLAN T07):
+ * Categories:
  * - `new-valid`       — valid activity, not a duplicate.
  * - `duplicate`        — fingerprint matches an already-imported activity.
  * - `known-skip`       — (outcomes only) allow-listed broker bookkeeping.
@@ -265,7 +265,7 @@ export interface ReviewRow {
   reason?: string;
   /** Whether this row's instrument symbol is unresolved (blocks import). */
   unresolvedSymbol?: boolean;
-  /** Whether this activity carries accrued interest (T09-gate flag). */
+  /** Whether this activity carries accrued interest. */
   hasAccruedInterest?: boolean;
   /** Whether this activity has warnings. */
   hasWarnings?: boolean;
@@ -446,7 +446,7 @@ export function computeConservation(state: ImportState): ConservationSummary {
 /**
  * Reconciliation residual rules: the import is blocked if the reconciliation
  * reports any unaccounted rows, any unsupported/invalid outcomes, or any BUY
- * drafts carrying accrued interest (T09-gate).
+ * drafts carrying accrued interest.
  */
 export interface ReconciliationResiduals {
   unaccountedCount: number;
@@ -484,7 +484,7 @@ export function computeReconciliationResiduals(state: ImportState): Reconciliati
   }
   if (reconciliation.buyDraftsWithAccruedInterestCount > 0) {
     failures.push(
-      `${reconciliation.buyDraftsWithAccruedInterestCount} BUY draft(s) with accrued interest (T09-gate: blocked until host representation is proven)`,
+      `${reconciliation.buyDraftsWithAccruedInterestCount} BUY draft(s) with accrued interest (host representation requires review)`,
     );
   }
   return {

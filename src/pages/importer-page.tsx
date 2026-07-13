@@ -1,10 +1,10 @@
 /**
- * Importer page — T07 four-step review/reconciliation wizard.
+ * Importer page — four-step review/reconciliation wizard.
  *
  * State machine: upload → mapping → review → reconcile → importing → done
  *
  * Runs inside the sandbox iframe using the single add-on-owned React root
- * from T06. Uses React state/effects + direct `ctx.api` calls. No host query
+ * Uses React state/effects + direct `ctx.api` calls. No host query
  * client wrapper and no router-hook dependency (React Router is unavailable in
  * the sandbox).
  *

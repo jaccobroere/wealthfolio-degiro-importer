@@ -6,7 +6,7 @@ services:
     environment:
       # Base64 for a synthetic 32-byte key; never used outside this disposable database.
       WF_SECRET_KEY: 'd2YtZGVnaXJvLWFkZG9uLXRlc3Qtc3ludGhldGljLWs='
-      # Synthetic password is T09-disposable-password; its Argon2id PHC hash is
+      # Synthetic password is synthetic-test-password; its Argon2id PHC hash is
       # intentionally test-only and enables the host's add-on manager.
       WF_AUTH_REQUIRED: 'true'
       WF_AUTH_PASSWORD_HASH: '$$argon2id$$v=19$$m=4096,t=3,p=1$$d2ZkZWdpcm90ZXN0c2FsdCE$$iU9k23FNcdwwokZ/JVoLI6Wkjzw3/YSRDDIzugs42Cs'

@@ -21,15 +21,9 @@
  *    across imported batches, are surfaced for review as potential overlapping
  *    imports. This is informational, never fatal.
  *
- * Deviation note (PLAN T03 "Fingerprint standalone activities from normalized
- * economic fields and timestamp"): the standalone idempotity fingerprint
- * additionally includes the source row number. Without it, the supplied real
- * statement has same-second per-exchange `Aansluitingskosten` fees that collide
- * under economic+timestamp alone, violating the mandatory "zero fingerprint-
- * collision outcomes" invariant. Source-row anchoring preserves exact re-import
- * duplicate detection (the primary use case) and is documented here and in the
- * handoff. Cross-statement overlapping-range detection is provided separately by
- * the overlap key and fully verified in a disposable host in T09.
+ * The standalone idempotency fingerprint additionally includes source-row
+ * provenance so same-timestamp bookkeeping events remain distinct. Cross-range
+ * overlap detection is provided separately by the overlap key.
  */
 
 import type { ActivityDraft } from '../domain/activity-draft';
