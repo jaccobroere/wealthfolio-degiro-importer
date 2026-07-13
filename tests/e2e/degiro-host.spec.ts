@@ -7,10 +7,12 @@ import {
   CASH_OVERLAP_FIXTURE,
   CANONICAL_SIGNS_FIXTURE,
   INVALID_FIXTURE,
+  MAPPING_PERSISTENCE_FIXTURE,
   completeOnboarding,
   createDisposableAccount,
   installExactAddon,
   openAddon,
+  restartDisposableHost,
   signIn,
   upload,
 } from './helpers';
@@ -229,7 +231,129 @@ test('blocks a synthetic invalid statement before the import action is available
   await expect(frame.getByTestId('import-button')).toBeDisabled();
 });
 
+test('persists a host-supported synthetic mapping configuration across a container restart', async ({
+  page,
+}) => {
+  let mappingGetUrl: string | undefined;
+  const searchResponses: { status: number; resultCount: number }[] = [];
+  page.on('response', (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (response.request().method() === 'GET' && pathname === '/api/v1/activities/import/mapping') {
+      mappingGetUrl = response.url();
+    }
+    if (response.request().method() === 'GET' && pathname === '/api/v1/market-data/search') {
+      void response.json().then((body: unknown) => {
+        searchResponses.push({
+          status: response.status(),
+          resultCount: Array.isArray(body) ? body.length : -1,
+        });
+      });
+    }
+  });
+
+  await signIn(page);
+  const frame = await openAddon(page);
+  await upload(frame, MAPPING_PERSISTENCE_FIXTURE);
+  await frame.getByTestId('account-select-trigger').click();
+  await frame.getByText(`${ACCOUNT_NAME} (EUR)`).click();
+  await expect(frame.getByTestId('unresolved-count')).toHaveText('1 unresolved');
+  await expect.poll(() => mappingGetUrl).toBeDefined();
+
+  // This is an isolated mapping-config record only: it neither creates an
+  // asset nor advances to review/import. The host API's accepted response is
+  // the persistence evidence; the synthetic target is never submitted as an
+  // activity asset.
+  const mappingUrl = new URL(mappingGetUrl!);
+  const accountId = mappingUrl.searchParams.get('accountId');
+  expect(accountId).toBeTruthy();
+  const mapping = {
+    accountId,
+    contextKind: 'degiro-importer',
+    fieldMappings: {},
+    activityMappings: {},
+    accountMappings: {},
+    symbolMappings: {
+      'degiro-importer::XSYNTHETIC-MAPPING-PROBE': JSON.stringify({
+        symbol: 'T09-PROBE',
+        exchangeMic: 'XTEST',
+        providerId: 't09-host-proof',
+      }),
+    },
+  };
+  const saved = await page.evaluate(async (payload) => {
+    const response = await fetch('/api/v1/activities/import/mapping', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mapping: payload }),
+    });
+    const body: unknown = await response.json();
+    return {
+      status: response.status,
+      hasProbe:
+        typeof body === 'object' &&
+        body !== null &&
+        'symbolMappings' in body &&
+        typeof (body as { symbolMappings?: unknown }).symbolMappings === 'object' &&
+        (body as { symbolMappings: Record<string, unknown> }).symbolMappings[
+          'degiro-importer::XSYNTHETIC-MAPPING-PROBE'
+        ] === payload.symbolMappings['degiro-importer::XSYNTHETIC-MAPPING-PROBE'],
+    };
+  }, mapping);
+  expect(saved).toEqual({ status: 200, hasProbe: true });
+
+  restartDisposableHost();
+  await signIn(page);
+  const reloaded = await page.evaluate(
+    async ({ accountId: persistedAccountId }) => {
+      const response = await fetch(
+        `/api/v1/activities/import/mapping?accountId=${encodeURIComponent(persistedAccountId!)}&contextKind=degiro-importer`,
+        { credentials: 'same-origin' },
+      );
+      const body: unknown = await response.json();
+      return {
+        status: response.status,
+        hasProbe:
+          typeof body === 'object' &&
+          body !== null &&
+          'symbolMappings' in body &&
+          typeof (body as { symbolMappings?: unknown }).symbolMappings === 'object' &&
+          typeof (body as { symbolMappings: Record<string, unknown> }).symbolMappings[
+            'degiro-importer::XSYNTHETIC-MAPPING-PROBE'
+          ] === 'string',
+      };
+    },
+    { accountId },
+  );
+  expect(reloaded).toEqual({ status: 200, hasProbe: true });
+
+  const restartedFrame = await openAddon(page);
+  await upload(restartedFrame, MAPPING_PERSISTENCE_FIXTURE);
+  await restartedFrame.getByTestId('account-select-trigger').click();
+  await restartedFrame.getByText(`${ACCOUNT_NAME} (EUR)`).click();
+  await expect(restartedFrame.getByText('T09-PROBE · XTEST (saved)')).toBeVisible();
+  await expect(restartedFrame.getByTestId('mapping-continue')).toBeEnabled();
+  await expect.poll(() => searchResponses.some((entry) => entry.resultCount === 0)).toBe(true);
+  expect(searchResponses.some((entry) => entry.status === 200 && entry.resultCount === 0)).toBe(
+    true,
+  );
+});
+
 test('keeps unresolved synthetic instruments out of host writes', async ({ page }) => {
+  const searchResponses: { status: number; resultCount: number }[] = [];
+  page.on('response', (response) => {
+    if (
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/market-data/search'
+    ) {
+      void response.json().then((body: unknown) => {
+        searchResponses.push({
+          status: response.status(),
+          resultCount: Array.isArray(body) ? body.length : -1,
+        });
+      });
+    }
+  });
   await signIn(page);
   const frame = await openAddon(page);
   await upload(frame, CANONICAL_SIGNS_FIXTURE);
@@ -239,11 +363,27 @@ test('keeps unresolved synthetic instruments out of host writes', async ({ page 
   await frame.getByTestId('search-btn-XSYNTHETIC01').click();
   await expect(frame.getByTestId('no-results-XSYNTHETIC01')).toBeVisible();
   await expect(frame.getByTestId('mapping-continue')).toBeDisabled();
+  await expect.poll(() => searchResponses.length).toBeGreaterThan(0);
+  expect(searchResponses).toContainEqual({ status: 200, resultCount: 0 });
 });
 
 test('keeps accrued-interest BUYs blocked until a synthetic asset is safely resolved', async ({
   page,
 }) => {
+  const searchResponses: { status: number; resultCount: number }[] = [];
+  page.on('response', (response) => {
+    if (
+      response.request().method() === 'GET' &&
+      new URL(response.url()).pathname === '/api/v1/market-data/search'
+    ) {
+      void response.json().then((body: unknown) => {
+        searchResponses.push({
+          status: response.status(),
+          resultCount: Array.isArray(body) ? body.length : -1,
+        });
+      });
+    }
+  });
   await signIn(page);
   const frame = await openAddon(page);
   await upload(frame, ACCRUED_INTEREST_FIXTURE);
@@ -252,6 +392,8 @@ test('keeps accrued-interest BUYs blocked until a synthetic asset is safely reso
   await frame.getByTestId('search-btn-XSYNTHETIC02').click();
   await expect(frame.getByTestId('no-results-XSYNTHETIC02')).toBeVisible();
   await expect(frame.getByTestId('mapping-continue')).toBeDisabled();
+  await expect.poll(() => searchResponses.length).toBeGreaterThan(0);
+  expect(searchResponses).toContainEqual({ status: 200, resultCount: 0 });
 });
 
 test('@acceptance parses a personal statement only when explicitly opted in', async ({ page }) => {
