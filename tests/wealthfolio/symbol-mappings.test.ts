@@ -81,7 +81,11 @@ describe('DEGIRO adapter: symbol mappings', () => {
     const outcome = resolveSymbol('US0378331005', saved, results);
     expect(outcome.status).toBe('resolved');
     if (outcome.status === 'resolved') {
-      expect(outcome.identity).toEqual(identity);
+      expect(outcome.identity).toEqual({
+        ...identity,
+        instrumentType: 'EQUITY',
+        providerSymbol: 'AAPL',
+      });
       expect(outcome.fromSaved).toBe(true);
     }
   });

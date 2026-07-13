@@ -184,6 +184,10 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
               ? { exchangeMic: r.canonicalExchangeMic ?? r.exchangeMic }
               : {}),
             ...(r.providerId ? { providerId: r.providerId } : {}),
+            ...(r.currency ? { quoteCcy: r.currency } : {}),
+            ...(r.quoteType ? { instrumentType: r.quoteType } : {}),
+            ...(r.providerSymbol ? { providerSymbol: r.providerSymbol } : {}),
+            ...(r.assetKind ? { kind: r.assetKind } : {}),
           })),
         });
 
@@ -224,12 +228,20 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       symbol: result.symbol,
       ...(result.exchangeMic ? { exchangeMic: result.exchangeMic } : {}),
       ...(result.providerId ? { providerId: result.providerId } : {}),
+      ...(result.quoteCcy ? { quoteCcy: result.quoteCcy } : {}),
+      ...(result.instrumentType ? { instrumentType: result.instrumentType } : {}),
+      ...(result.providerSymbol ? { providerSymbol: result.providerSymbol } : {}),
+      ...(result.kind ? { kind: result.kind } : {}),
     };
     const mapping: ResolvedMapping = {
       sourceTickerOrIsin,
       symbol: identity.symbol,
       ...(identity.exchangeMic ? { exchangeMic: identity.exchangeMic } : {}),
       ...(identity.providerId ? { providerId: identity.providerId } : {}),
+      ...(identity.quoteCcy ? { quoteCcy: identity.quoteCcy } : {}),
+      ...(identity.instrumentType ? { instrumentType: identity.instrumentType } : {}),
+      ...(identity.providerSymbol ? { providerSymbol: identity.providerSymbol } : {}),
+      ...(identity.kind ? { kind: identity.kind } : {}),
       fromSaved: false,
     };
     dispatch({
@@ -268,6 +280,10 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
             symbol: res.mapping.symbol,
             ...(res.mapping.exchangeMic ? { exchangeMic: res.mapping.exchangeMic } : {}),
             ...(res.mapping.providerId ? { providerId: res.mapping.providerId } : {}),
+            ...(res.mapping.quoteCcy ? { quoteCcy: res.mapping.quoteCcy } : {}),
+            ...(res.mapping.instrumentType ? { instrumentType: res.mapping.instrumentType } : {}),
+            ...(res.mapping.providerSymbol ? { providerSymbol: res.mapping.providerSymbol } : {}),
+            ...(res.mapping.kind ? { kind: res.mapping.kind } : {}),
           });
         }
         return undefined;
@@ -387,6 +403,10 @@ interface CompactSearchResult {
   exchange: string;
   exchangeMic?: string;
   providerId?: string;
+  quoteCcy?: string;
+  instrumentType?: string;
+  providerSymbol?: string;
+  kind?: string;
 }
 
 /** Convert a `ResolutionOutcome` to a UI `SymbolResolution`. */
@@ -400,6 +420,14 @@ function outcomeToResolution(outcome: ReturnType<typeof resolveSymbol>): SymbolR
           symbol: outcome.identity.symbol,
           ...(outcome.identity.exchangeMic ? { exchangeMic: outcome.identity.exchangeMic } : {}),
           ...(outcome.identity.providerId ? { providerId: outcome.identity.providerId } : {}),
+          ...(outcome.identity.quoteCcy ? { quoteCcy: outcome.identity.quoteCcy } : {}),
+          ...(outcome.identity.instrumentType
+            ? { instrumentType: outcome.identity.instrumentType }
+            : {}),
+          ...(outcome.identity.providerSymbol
+            ? { providerSymbol: outcome.identity.providerSymbol }
+            : {}),
+          ...(outcome.identity.kind ? { kind: outcome.identity.kind } : {}),
           fromSaved: outcome.fromSaved,
         },
       };

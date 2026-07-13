@@ -472,7 +472,7 @@ test('keeps unresolved synthetic instruments out of host writes', async ({ page 
   expect(searchResponses).toContainEqual({ status: 200, resultCount: 0 });
 });
 
-test('keeps accrued-interest BUYs blocked until a synthetic asset is safely resolved', async ({
+test('explicitly selects a host-supported test instrument but keeps accrued-interest BUYs gated', async ({
   page,
 }) => {
   const searchResponses: { status: number; resultCount: number }[] = [];
@@ -494,11 +494,18 @@ test('keeps accrued-interest BUYs blocked until a synthetic asset is safely reso
   await upload(frame, ACCRUED_INTEREST_FIXTURE);
   await frame.getByTestId('account-select-trigger').click();
   await frame.getByText(`${ACCOUNT_NAME} (EUR)`).click();
-  await frame.getByTestId('search-btn-XSYNTHETIC02').click();
-  await expect(frame.getByTestId('no-results-XSYNTHETIC02')).toBeVisible();
+  await frame.getByTestId('search-btn-US0378331005').click();
+  await expect(frame.getByTestId('search-results-US0378331005')).toBeVisible();
+  await expect(frame.getByTestId('search-result-US0378331005-0')).toBeVisible();
   await expect(frame.getByTestId('mapping-continue')).toBeDisabled();
+  await frame.getByTestId('search-result-US0378331005-0').click();
+  await expect(frame.getByTestId('mapping-continue')).toBeEnabled();
+  await frame.getByTestId('mapping-continue').click();
+  await frame.getByTestId('review-continue').click();
+  await frame.getByTestId('acknowledge-checkbox').click();
+  await expect(frame.getByTestId('import-button')).toBeDisabled();
   await expect.poll(() => searchResponses.length).toBeGreaterThan(0);
-  expect(searchResponses).toContainEqual({ status: 200, resultCount: 0 });
+  expect(searchResponses.some((entry) => entry.status === 200 && entry.resultCount > 0)).toBe(true);
 });
 
 test('@acceptance parses a personal statement only when explicitly opted in', async ({ page }) => {
