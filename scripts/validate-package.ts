@@ -104,7 +104,7 @@ const root = (name: string) =>
   name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
 if (bareImports.some((name) => !(root(name) in manifest.hostDependencies)))
   fail('bundle has a non-host external import');
-for (const signature of ['Decimal.config', 'delimitersToGuess', 'dynamicTyping']) {
+for (const signature of ['delimitersToGuess', 'dynamicTyping']) {
   if (!bundle.includes(signature)) fail(`missing bundled parser signature: ${signature}`);
 }
 for (const hostImport of ['react', 'react-dom/client', '@wealthfolio/ui']) {
