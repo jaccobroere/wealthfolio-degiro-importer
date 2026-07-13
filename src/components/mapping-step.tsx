@@ -15,10 +15,12 @@
 import { useState, type ReactElement } from 'react';
 import { Button, Badge } from '@wealthfolio/ui';
 import { AlertCircle, CheckCircle2, HelpCircle, Search, Loader2 } from 'lucide-react';
-import type { SymbolResolution } from '../state/import-state';
+import type { SymbolResolution, UploadSummary } from '../state/import-state';
 import { AccountSelect, type AccountOption } from './account-select';
 
 export interface MappingStepProps {
+  /** Privacy-safe parse results retained after the upload step advances here. */
+  uploadSummary: UploadSummary;
   accounts: AccountOption[];
   accountId: string | null;
   onSelectAccount: (accountId: string) => void;
@@ -45,6 +47,7 @@ export interface MappingStepProps {
 
 export function MappingStep(props: MappingStepProps): ReactElement {
   const {
+    uploadSummary,
     accounts,
     accountId,
     onSelectAccount,
@@ -73,6 +76,8 @@ export function MappingStep(props: MappingStepProps): ReactElement {
           symbols block the import.
         </p>
       </div>
+
+      <ParsedStatementSummary summary={uploadSummary} />
 
       <AccountSelect accounts={accounts} accountId={accountId} onChange={onSelectAccount} />
 
@@ -128,6 +133,41 @@ export function MappingStep(props: MappingStepProps): ReactElement {
             Continue to review
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Keep parse-only evidence visible after the automatic upload → mapping
+ * transition. This intentionally contains aggregates only, never statement
+ * values or identifiers.
+ */
+function ParsedStatementSummary({ summary }: { summary: UploadSummary }): ReactElement {
+  return (
+    <div
+      className="rounded-md border border-success/50 bg-success/10 p-3 space-y-1"
+      data-testid="parsed-statement-summary"
+    >
+      <p className="text-sm font-medium">File parsed successfully</p>
+      <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+        <span data-testid="parsed-row-count">{summary.rowCount} rows</span>
+        <span data-testid="parsed-activity-count">{summary.activityCount} activities</span>
+        <span>Header: {summary.headerVariant}</span>
+        {summary.minDate && summary.maxDate ? (
+          <span>
+            Date range: {summary.minDate.slice(0, 10)} → {summary.maxDate.slice(0, 10)}
+          </span>
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        {Object.entries(summary.byActivityType)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([type, count]) => (
+            <span key={type} data-testid={`parsed-activity-type-${type}`}>
+              {type}: {count}
+            </span>
+          ))}
       </div>
     </div>
   );

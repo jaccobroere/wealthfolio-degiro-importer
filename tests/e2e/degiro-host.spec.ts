@@ -14,6 +14,7 @@ import {
   signIn,
   upload,
 } from './helpers';
+import { EXPECTED } from '../acceptance/degiro-real-expected';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -260,12 +261,32 @@ test('@acceptance parses a personal statement only when explicitly opted in', as
   );
   await signIn(page);
   const frame = await openAddon(page);
+  const writes: string[] = [];
+  page.on('request', (request) => {
+    const url = new URL(request.url());
+    if (
+      url.pathname.startsWith('/api/v1/') &&
+      !['GET', 'HEAD', 'OPTIONS'].includes(request.method())
+    ) {
+      // Keep failure output structural: never retain request data, IDs, or paths.
+      writes.push(request.method());
+    }
+  });
   await upload(frame, process.env.DEGIRO_ACCEPTANCE_CSV!);
-  // Parse-only review: do not select an account, map a symbol, reconcile, or write.
-  await expect(frame.getByText('File parsed successfully')).toBeVisible();
-  await expect(frame.getByText(/\d+ rows/)).toBeVisible();
-  await expect(frame.getByText(/Header: (Dutch|English)/)).toBeVisible();
-  await expect(frame.getByText(/Date range: \d{4}-\d{2}-\d{2} → \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  // The wizard advances immediately after parsing, so parse-only evidence lives
+  // on mapping. Do not select an account, map a symbol, reconcile, or write.
+  await expect(
+    frame.getByText('Could not parse this file'),
+    'The local UI reported a parse error; statement contents are intentionally not emitted.',
+  ).toBeHidden();
   await expect(frame.getByRole('heading', { name: /Step 2.*Account/ })).toBeVisible();
-  await expect(frame.getByTestId('step-mapping')).toBeVisible();
+  await expect(frame.getByTestId('parsed-statement-summary')).toBeVisible();
+  await expect(frame.getByTestId('parsed-row-count')).toHaveText(`${EXPECTED.sourceRowCount} rows`);
+  await expect(frame.getByTestId('parsed-activity-count')).toHaveText(
+    `${EXPECTED.activityCount} activities`,
+  );
+  for (const [type, count] of Object.entries(EXPECTED.byActivityType)) {
+    await expect(frame.getByTestId(`parsed-activity-type-${type}`)).toHaveText(`${type}: ${count}`);
+  }
+  expect(writes).toEqual([]);
 });
