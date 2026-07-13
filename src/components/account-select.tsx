@@ -1,5 +1,5 @@
 /**
- * Account select (T07, step 2 sub-component).
+ * Account select.
  *
  * Renders the destination account dropdown from `ctx.api.accounts.getAll()`.
  * Pure presentational — receives accounts + selected id + onChange.

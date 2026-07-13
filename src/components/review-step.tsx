@@ -1,5 +1,5 @@
 /**
- * Review step (T07, step 3/4).
+ * Review step.
  *
  * Categorizes every row outcome and provides filters: errors, warnings,
  * duplicates, skips, cash movements, trades, dividends, fees/taxes/credits.

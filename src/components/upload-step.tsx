@@ -1,5 +1,5 @@
 /**
- * Upload step (T07, step 1/4).
+ * Upload step.
  *
  * Browser `<input type="file">` + `FileReader`. Validates the schema via the
  * pure-core strict detector (`parseAndMap`). Displays row count + date range

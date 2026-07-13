@@ -57,4 +57,4 @@ Repository visibility, GitHub Actions enablement, release publication,
 production installation, and VPS pinning are each **separate explicit approval
 gates**. Do not enable Actions, publish a release, change visibility, or install
 in production without explicit authorization. Disposable Wealthfolio integration
-(T09) precedes release.
+precedes release.

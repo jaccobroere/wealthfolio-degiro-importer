@@ -1,5 +1,5 @@
 /**
- * Addon sandbox lifecycle proof (T06).
+ * Addon sandbox lifecycle proof.
  *
  * Verifies the 3.6.1 sandbox contract from `docs/SDK-CONTRACT.md`:
  *  1. `enable(ctx)` registers exactly one sidebar item and one route.
@@ -84,7 +84,7 @@ function makeRootEl(): HTMLElement {
   return document.createElement('div');
 }
 
-describe('addon sandbox lifecycle (T06)', () => {
+describe('addon sandbox lifecycle', () => {
   let ctx: FakeCtx;
   let disableCb: (() => void) | undefined;
   let sidebarHandle: SidebarItemHandle;
@@ -198,7 +198,7 @@ describe('addon sandbox lifecycle (T06)', () => {
 });
 
 // --- Static contract checks ------------------------------------------------
-describe('addon static contract (T06)', () => {
+describe('addon static contract', () => {
   const addonSrc = readFileSync(resolve(__dirname, '../src/addon.tsx'), 'utf8');
   const manifestSrc = readFileSync(resolve(__dirname, '../manifest.json'), 'utf8');
 

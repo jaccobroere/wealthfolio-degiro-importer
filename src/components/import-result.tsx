@@ -1,5 +1,5 @@
 /**
- * Import result (T07, done step).
+ * Import result.
  *
  * Shows the outcome of `saveMany({ creates })`: created count, skipped
  * duplicates, blocked rows, and any fatal error. Offers a reset to start

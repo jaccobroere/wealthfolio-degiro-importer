@@ -1,5 +1,5 @@
 /**
- * Reconciliation panel (T07, step 4/4).
+ * Reconciliation panel.
  *
  * Shows net position movement per resolved asset + cash movement per currency.
  * DEGIRO additionally shows fees, taxes, accrued interest (the 4 Meegekochte
@@ -147,7 +147,7 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
           />
           <Stat label="Internal cash skips" value={reconciliation.knownInternalMovementCount} />
           <Stat
-            label="BUY w/ accrued (T09-gate)"
+            label="BUY w/ accrued"
             value={reconciliation.buyDraftsWithAccruedInterestCount}
             ok={reconciliation.buyDraftsWithAccruedInterestCount === 0}
           />

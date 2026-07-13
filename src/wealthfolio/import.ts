@@ -145,7 +145,7 @@ export async function runImport(
     if (typeof fp === 'string' && fp.length > 0) createdFingerprints.push(fp);
   }
 
-  // If the host did not round-trip metadata (T09-gate), fall back to positional
+  // If the host did not round-trip metadata, fall back to positional
   // correlation: assume `created` is in the same order as `creates`. This is
   // defensive only; the metadata round-trip is the verified protocol.
   if (

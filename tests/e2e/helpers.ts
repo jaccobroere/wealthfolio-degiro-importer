@@ -25,7 +25,7 @@ export const MAPPING_PERSISTENCE_FIXTURE = path.join(
   import.meta.dirname,
   'fixtures/degiro-mapping-persistence.csv',
 );
-export const ACCOUNT_NAME = 'T09 Disposable DEGIRO';
+export const ACCOUNT_NAME = 'Synthetic DEGIRO Test';
 
 export function addonFrame(page: Page): FrameLocator {
   return page.frameLocator('iframe');
@@ -56,7 +56,7 @@ export async function signIn(page: Page): Promise<void> {
   await page.waitForTimeout(500);
   if ((await password.count()) === 0) return;
   await expect(password).toBeVisible();
-  await password.fill('T09-disposable-password');
+  await password.fill('synthetic-test-password');
   const loginResponse = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/v1/auth/login') && response.request().method() === 'POST',

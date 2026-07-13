@@ -1,5 +1,5 @@
 /**
- * Review table (T07, step 3 sub-component).
+ * Review table.
  *
  * Renders the categorized review rows. Shows source row number/type +
  * normalized values only. Does NOT render raw balances or order IDs by
@@ -95,7 +95,7 @@ export function ReviewTable({ rows, filters }: ReviewTableProps): ReactElement {
                   {r.symbol ?? '—'}
                   {r.unresolvedSymbol ? <span className="text-destructive ml-1">⚠</span> : null}
                   {r.hasAccruedInterest ? (
-                    <span className="text-warning ml-1" title="Carries accrued interest (T09-gate)">
+                    <span className="text-warning ml-1" title="Carries accrued interest">
                       ⏳
                     </span>
                   ) : null}

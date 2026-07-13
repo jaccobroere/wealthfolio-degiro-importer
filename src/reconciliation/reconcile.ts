@@ -52,7 +52,7 @@ export interface Reconciliation {
   skipReasons: Record<string, number>;
   /** Source rows not mapped to any outcome (must be 0). */
   unaccountedCount: number;
-  /** Count of grouped BUY drafts that carry accrued interest (T09-gate flag). */
+  /** Count of grouped BUY drafts that carry accrued interest. */
   buyDraftsWithAccruedInterestCount: number;
 }
 
