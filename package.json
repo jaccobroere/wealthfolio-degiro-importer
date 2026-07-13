@@ -76,7 +76,7 @@
     "@wealthfolio/ui": "^3.6.0",
     "date-fns": "^4.1.0",
     "decimal.js": "10.6.0",
-    "eslint": "^9.18.0",
+    "eslint": "^10.7.0",
     "fast-check": "^3.19.0",
     "jsdom": "^26.1.0",
     "lucide-react": "^0.561.0",
