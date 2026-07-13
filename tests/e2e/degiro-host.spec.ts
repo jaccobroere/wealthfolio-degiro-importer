@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import {
   ACCOUNT_NAME,
   ACCRUED_INTEREST_FIXTURE,
+  CASH_BATCH_PROBE_FIXTURE,
   CASH_FIXTURE,
   CASH_OVERLAP_FIXTURE,
   CANONICAL_SIGNS_FIXTURE,
@@ -214,6 +215,110 @@ test('imports a synthetic cash-only statement and skips the same statement on re
     return (await response.json()) as { data?: unknown[] };
   }, activitiesSearch!);
   expect(afterOverlap.data).toHaveLength(3);
+});
+
+test('saveMany rejects a mixed valid and invalid cash-only batch atomically', async ({ page }) => {
+  let bulkRequest: { url: string; creates: Array<Record<string, unknown>> } | undefined;
+  let activitiesSearch: { url: string; accountIdFilter: string[] } | undefined;
+  page.on('response', (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (response.request().method() !== 'POST') return;
+    const body = JSON.parse(response.request().postData() ?? '{}') as {
+      creates?: unknown;
+      accountIdFilter?: unknown;
+      pageSize?: unknown;
+    };
+    // The live add-on supplies both the authenticated host route and a
+    // host-accepted cash ActivityCreate shape. The direct mixed batch below
+    // changes only quoteCcy on one otherwise cash-only create.
+    if (pathname === '/api/v1/activities/bulk' && Array.isArray(body.creates)) {
+      bulkRequest = {
+        url: response.url(),
+        creates: body.creates as Array<Record<string, unknown>>,
+      };
+    }
+    if (
+      pathname === '/api/v1/activities/search' &&
+      body.pageSize === Number.MAX_SAFE_INTEGER &&
+      Array.isArray(body.accountIdFilter) &&
+      body.accountIdFilter.every((id): id is string => typeof id === 'string')
+    ) {
+      activitiesSearch = { url: response.url(), accountIdFilter: body.accountIdFilter };
+    }
+  });
+
+  await signIn(page);
+  const frame = await openAddon(page);
+  await upload(frame, CASH_BATCH_PROBE_FIXTURE);
+  await frame.getByTestId('account-select-trigger').click();
+  await frame.getByText(`${ACCOUNT_NAME} (EUR)`).click();
+  await frame.getByTestId('mapping-continue').click();
+  await frame.getByTestId('review-continue').click();
+  await frame.getByTestId('acknowledge-checkbox').click();
+  await frame.getByTestId('import-button').click();
+  await expect(frame.getByRole('heading', { name: 'Import complete' })).toBeVisible();
+  await expect.poll(() => bulkRequest).toBeDefined();
+  await expect.poll(() => activitiesSearch).toBeDefined();
+  expect(bulkRequest!.creates).toHaveLength(1);
+
+  const observed = await page.evaluate(
+    async ({ bulkUrl, searchUrl, accountIdFilter, source }) => {
+      const count = async () => {
+        const response = await fetch(searchUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            page: 0,
+            pageSize: Number.MAX_SAFE_INTEGER,
+            accountIdFilter,
+            sort: { id: 'date', desc: true },
+          }),
+        });
+        const payload = (await response.json()) as { data?: unknown[] };
+        return Array.isArray(payload.data) ? payload.data.length : -1;
+      };
+      const valid = structuredClone(source);
+      const invalid = structuredClone(source);
+      // Cash-only negative control: the documented mandatory cash quote currency
+      // is removed. No asset, instrument, account, or personal input is created.
+      invalid.asset = {};
+      const before = await count();
+      const response = await fetch(bulkUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ creates: [valid, invalid] }),
+      });
+      const payload: unknown = await response.json().catch(() => undefined);
+      const object = typeof payload === 'object' && payload !== null ? payload : {};
+      return {
+        status: response.status,
+        createdCount: Array.isArray((object as { created?: unknown }).created)
+          ? (object as { created: unknown[] }).created.length
+          : 0,
+        errorCount: Array.isArray((object as { errors?: unknown }).errors)
+          ? (object as { errors: unknown[] }).errors.length
+          : 0,
+        persistedDelta: (await count()) - before,
+      };
+    },
+    {
+      bulkUrl: bulkRequest!.url,
+      searchUrl: activitiesSearch!.url,
+      accountIdFilter: activitiesSearch!.accountIdFilter,
+      source: bulkRequest!.creates[0],
+    },
+  );
+
+  // Deliberately assert the observed host contract rather than infer it from
+  // the SDK type: the persisted search delta is independent of response shape.
+  expect(observed, 'mixed cash-batch host observation').toEqual({
+    status: 400,
+    createdCount: 0,
+    errorCount: 0,
+    persistedDelta: 0,
+  });
 });
 
 test('blocks a synthetic invalid statement before the import action is available', async ({

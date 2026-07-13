@@ -43,6 +43,13 @@ The E2E suite proves write outcomes and duplicate behavior; the direct
 `checkImport`-before-`saveMany` call ordering remains covered by
 `tests/wealthfolio/import-flow.test.ts` until the host offers an auditable API.
 
+The suite also proves the 3.6.1 bulk mutation failure boundary with a direct,
+authenticated mixed cash-only request. It first captures the exact bulk route
+and host-accepted cash create shape from the installed ZIP, removes only the
+required cash `asset.quoteCcy` from the second create, and verifies HTTP 400
+plus a zero authenticated-search count delta. It creates no asset or instrument
+and global teardown removes the disposable volume.
+
 The synthetic mapping-persistence test restarts only the `wealthfolio` service
 without deleting the named disposable volume, then global teardown removes the
 entire project. It saves a mapping configuration only—never an asset or an

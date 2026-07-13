@@ -12,8 +12,9 @@ material changes).
 ## Status
 
 Targeted at Wealthfolio host `3.6.1`. Initial release version `1.1.0` is
-**BLOCKED** pending remaining T09 accrued-interest and host-behavior proof.
-This repository has not published that release or validated a production host.
+**BLOCKED** pending remaining T09 accrued-interest proof. The pinned
+disposable host has proved `saveMany` is atomic for a mixed cash-only batch;
+this repository has not published that release or validated a production host.
 
 ## Requirements
 
