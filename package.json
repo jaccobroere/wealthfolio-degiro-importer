@@ -3,6 +3,9 @@
   "version": "1.1.0",
   "type": "module",
   "description": "Wealthfolio 3.6.1 addon for importing DEGIRO account statements",
+  "engines": {
+    "node": ">=22"
+  },
   "author": "shuisman; port maintained by Jacco Broere",
   "license": "MIT",
   "packageManager": "pnpm@10.34.5",
