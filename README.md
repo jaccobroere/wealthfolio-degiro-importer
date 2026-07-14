@@ -12,8 +12,7 @@ to a service.
 ## Compatibility
 
 - Wealthfolio: >= 3.6.1
-- Add-on SDK: 3.6.x (built against ~3.6.1)
-- Tested with Wealthfolio: 3.6.2
+- Add-on SDK: 3.6.x (built against 3.6.1)
 
 | Component     | Supported version or format                            |
 | ------------- | ------------------------------------------------------ |

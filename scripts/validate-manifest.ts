@@ -162,14 +162,16 @@ if (/['"]\/addon\//.test(addonSrc)) {
 if (/sidebar\.addItem\s*\(/.test(addonSrc)) {
   fail('ctx.sidebar.addItem must not be called; navigation is manifest-declared');
 }
-// No source-level component route registration yet (PR 2 switches to component
-// when the 3.6.2 SDK ships; the published 3.6.1 SDK only has `render`).
+// The published 3.6.1 SDK supports only the `render` route model; the
+// `component` model is unreleased (3.6.2). Reject `component:` in source so a
+// future contributor does not adopt an API that does not exist on the targeted
+// host. Revisit when 3.6.2 ships.
 if (
   sourceFiles('src').some(
     (file) => /\.[tj]sx?$/.test(file) && /\bcomponent\s*:/.test(readFileSync(file, 'utf8')),
   )
 ) {
-  fail('source-level component route registration is unsupported (until the 3.6.2 SDK ships)');
+  fail('source-level component route registration is unsupported on the 3.6.1 SDK (render only)');
 }
 
 // --- sandbox contract: no browser storage or direct external networking -----
