@@ -1,20 +1,21 @@
 /**
- * Wealthfolio 3.6.1 sandbox addon entry.
+ * Wealthfolio 3.6.1+ sandbox addon entry.
  *
- * Registers one runtime sidebar item and one route, owns exactly one React
- * root for the route, reuses that root across renders, and cleans both up in
- * `ctx.onDisable()`.
+ * Sidebar navigation is declared in the manifest (`contributes.links.sidebar`),
+ * so the runtime registers only the route renderer. The route id (`main`)
+ * MUST match `contributes.routes[].id` in `manifest.json` or the host renders a
+ * blank page. The route is currently on the 3.6.1 `render`-callback model; PR 2
+ * will switch it to the preferred host-managed `component` model.
  *
- * Contract (verified against `@wealthfolio/addon-sdk` 3.6.1, see
+ * Contract (verified against `@wealthfolio/addon-sdk` 3.6.1+, see
  * `docs/SDK-CONTRACT.md`):
- * - `ctx.router.add({ id?, path, render })` with `render({ root, location })`.
+ * - `ctx.router.add({ id, path, render })` with `render({ root, location })`.
+ *   `id` must equal `manifest.json` `contributes.routes[].id`.
  * - Create ONE React root via `createRoot(root)` (from `react-dom/client`),
  *   reuse it across renders, unmount in `ctx.onDisable()`.
- * - `ctx.sidebar.addItem(config)` returns a handle with `.remove()`; call
- *   `.remove()` in `ctx.onDisable()`.
- * - Uses the 3.6.1 `render`-callback route model (no legacy route component
- *   field, no manifest contribution block), no React-DOM global, no
- *   React-Router hooks (router context is unavailable in the sandbox).
+ * - No `ctx.sidebar.addItem` — navigation comes from `contributes.links.sidebar`.
+ * - No legacy route `component` field, no React-DOM global, no React-Router
+ *   hooks (router context is unavailable in the sandbox).
  */
 import { createElement } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
@@ -27,10 +28,10 @@ import type {
 
 import { ImporterPage } from './pages/importer-page';
 
-/** Manifest id, route id, and sidebar id — all identical and stable. */
-const ADDON_ID = 'degiro-importer';
-/** Sandbox route path. */
-const ROUTE_PATH = '/addon/degiro-importer';
+/** Route id — MUST match `manifest.json` `contributes.routes[].id`. */
+const ROUTE_ID = 'main';
+/** Sandbox route path (plural, manifest-id-derived). */
+const ROUTE_PATH = '/addons/degiro-importer';
 
 /**
  * Per-enable module state. Held in module-scope refs so the `render` callback
@@ -39,7 +40,6 @@ const ROUTE_PATH = '/addon/degiro-importer';
  *
  * These are reset to `null` in `onDisable` so a re-enable creates a new root.
  */
-let sidebarHandle: ReturnType<AddonContext['sidebar']['addItem']> | null = null;
 let reactRoot: Root | null = null;
 
 /**
@@ -76,7 +76,7 @@ function render({ root, location, ...hostContext }: AddonRouteRenderContext): vo
 let ctxRef: AddonContext | null = null;
 
 /**
- * Addon enable entry. Called by the 3.6.1 sandbox when the addon is enabled.
+ * Addon enable entry. Called by the 3.6.1+ sandbox when the addon is enabled.
  */
 export function enable(ctx: AddonContext): void {
   // Guard against double-enable without an intervening disable.
@@ -85,26 +85,16 @@ export function enable(ctx: AddonContext): void {
   }
   ctxRef = ctx;
 
-  sidebarHandle = ctx.sidebar.addItem({
-    id: ADDON_ID,
-    label: 'DEGIRO Import',
-    icon: 'files',
-    route: ROUTE_PATH,
-    order: 100,
-  });
-
+  // Sidebar navigation is manifest-declared (`contributes.links.sidebar`); the
+  // runtime registers only the route renderer. The route id MUST match the
+  // manifest's declared route id.
   ctx.router.add({
-    id: ADDON_ID,
+    id: ROUTE_ID,
     path: ROUTE_PATH,
     render,
   });
 
   ctx.onDisable(() => {
-    // Remove the sidebar item exactly once.
-    if (sidebarHandle !== null) {
-      sidebarHandle.remove();
-      sidebarHandle = null;
-    }
     // Unmount the React root exactly once.
     if (reactRoot !== null) {
       reactRoot.unmount();
@@ -117,7 +107,6 @@ export function enable(ctx: AddonContext): void {
 
 /** Exported for tests so they can reset module state between cases. */
 export function __resetForTests(): void {
-  sidebarHandle = null;
   reactRoot = null;
   ctxRef = null;
 }

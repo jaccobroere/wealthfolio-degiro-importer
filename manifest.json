@@ -24,8 +24,8 @@
   "permissions": [
     {
       "category": "ui",
-      "functions": ["sidebar.addItem", "router.add", "onDisable"],
-      "purpose": "Register the importer sidebar item and route, and clean up on disable"
+      "functions": ["router.add", "onDisable"],
+      "purpose": "Register the importer route and release addon state on disable"
     },
     {
       "category": "accounts",
@@ -42,5 +42,19 @@
       "functions": ["searchTicker"],
       "purpose": "Resolve ISINs to exchange instruments during the explicit symbol mapping step"
     }
-  ]
+  ],
+  "contributes": {
+    "routes": [{ "id": "main" }],
+    "links": {
+      "sidebar": [
+        {
+          "id": "main-nav",
+          "route": "main",
+          "label": "DEGIRO Import",
+          "icon": "files",
+          "order": 100
+        }
+      ]
+    }
+  }
 }
