@@ -5,6 +5,11 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 1.2.1
+
+- Same as 1.2.0 (the v1.2.0 tag was burned: its release workflow failed on an
+  attestation-version mismatch before any artifact was published).
+
 ## 1.2.0
 
 - Manifest-declared sidebar navigation (`contributes.links.sidebar`); runtime
