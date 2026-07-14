@@ -114,6 +114,7 @@ for (const hostImport of ['react', 'react-dom/client', '@wealthfolio/ui']) {
   )
     fail(`host dependency is not an ESM external: ${hostImport}`);
 }
+
 console.log(
   `Package validation passed (${entries.length} entries; ${statSync(zipPath).size} compressed bytes).`,
 );

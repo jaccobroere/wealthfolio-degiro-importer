@@ -54,7 +54,7 @@ importers:
         specifier: ^3.6.0
         version: 3.6.1
       '@wealthfolio/addon-sdk':
-        specifier: ^3.6.0
+        specifier: ~3.6.1
         version: 3.6.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@wealthfolio/ui':
         specifier: ^3.6.0

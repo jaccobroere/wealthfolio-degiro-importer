@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { ADDON_ICON_NAMES } from '@wealthfolio/addon-sdk';
+import { HOST_DEPENDENCIES } from '@wealthfolio/addon-sdk/host-dependencies';
 
 type ContributedRoute = { id: string; path?: string };
 type ContributedLink = {
@@ -89,7 +90,15 @@ for (const link of sidebar) {
   }
 }
 
-// --- host dependencies -------------------------------------------------------
+// --- host dependencies (single source of truth: SDK HOST_DEPENDENCIES) ------
+// manifest.hostDependencies MUST exactly match the SDK's exported
+// HOST_DEPENDENCIES, which is also what vite.config.ts externalizes. This
+// prevents drift between the manifest, the build, and the package.json peer
+// dependencies. Keep package.json peerDependencies in sync too (asserted
+// below).
+if (JSON.stringify(manifest.hostDependencies) !== JSON.stringify(HOST_DEPENDENCIES)) {
+  fail('hostDependencies must exactly match @wealthfolio/addon-sdk HOST_DEPENDENCIES');
+}
 if (JSON.stringify(manifest.hostDependencies) !== JSON.stringify(packageJson.peerDependencies)) {
   fail('hostDependencies must exactly match package.json peerDependencies');
 }
@@ -153,12 +162,38 @@ if (/['"]\/addon\//.test(addonSrc)) {
 if (/sidebar\.addItem\s*\(/.test(addonSrc)) {
   fail('ctx.sidebar.addItem must not be called; navigation is manifest-declared');
 }
-// No source-level component route registration yet (PR 2 switches to component).
+// No source-level component route registration yet (PR 2 switches to component
+// when the 3.6.2 SDK ships; the published 3.6.1 SDK only has `render`).
 if (
   sourceFiles('src').some(
     (file) => /\.[tj]sx?$/.test(file) && /\bcomponent\s*:/.test(readFileSync(file, 'utf8')),
   )
 ) {
-  fail('source-level component route registration is unsupported (until PR 2)');
+  fail('source-level component route registration is unsupported (until the 3.6.2 SDK ships)');
+}
+
+// --- sandbox contract: no browser storage or direct external networking -----
+// The opaque-origin sandbox throws on localStorage/sessionStorage/indexedDB,
+// and direct fetch/XHR/WebSocket/EventSource are blocked by CSP. Addons must
+// use ctx.api.storage and ctx.api.network.request respectively. This scan
+// covers the addon's OWN source only (bundled third-party code like papaparse
+// may legitimately reference XMLHttpRequest in an unused download fallback).
+const forbiddenSandboxApis = [
+  /\blocalStorage\b/,
+  /\bsessionStorage\b/,
+  /\bindexedDB\b/,
+  /\bXMLHttpRequest\b/,
+  /\bWebSocket\b/,
+  /\bEventSource\b/,
+  /\bfetch\s*\(/,
+];
+for (const file of sourceFiles('src')) {
+  if (!/\.[tj]sx?$/.test(file)) continue;
+  const src = readFileSync(file, 'utf8');
+  for (const pattern of forbiddenSandboxApis) {
+    if (pattern.test(src)) {
+      fail(`src/${file.replace(/^src\//, '')} references forbidden sandbox API: ${pattern.source}`);
+    }
+  }
 }
 console.log('Manifest validation passed.');
