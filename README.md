@@ -3,7 +3,7 @@
 Import a DEGIRO **Account statement** CSV into Wealthfolio with a review step
 for symbols, reconciliation before writing, and duplicate-safe imports.
 
-This addon is designed for Wealthfolio 3.6.1. It reads a file exported from
+This addon is designed for Wealthfolio 3.6.1+. It reads a file exported from
 DEGIRO locally; it does not connect to DEGIRO and does not send your statement
 to a service.
 
@@ -11,9 +11,12 @@ to a service.
 
 ## Compatibility
 
+- Wealthfolio: >= 3.6.1
+- Add-on SDK: 3.6.x (built against 3.6.1)
+
 | Component     | Supported version or format                            |
 | ------------- | ------------------------------------------------------ |
-| Wealthfolio   | 3.6.1                                                  |
+| Wealthfolio   | >= 3.6.1                                               |
 | Addon package | `wealthfolio-degiro-importer-<version>.zip`            |
 | Source file   | DEGIRO **Account statement** CSV                       |
 | License       | MIT; see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md) |
