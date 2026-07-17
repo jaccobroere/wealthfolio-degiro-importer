@@ -16,6 +16,7 @@ import {
   identityToAsset,
   readSavedMappings,
   resolveSymbol,
+  withoutSavedMapping,
   resultToIdentity,
   withSavedMapping,
 } from '../../src/wealthfolio/symbol-mappings';
@@ -157,5 +158,23 @@ describe('DEGIRO adapter: symbol mappings', () => {
     const updated = withSavedMapping(original, 'US0378331005', { symbol: 'AAPL' });
     expect(original.symbolMappings).toEqual({});
     expect(updated.symbolMappings[`${IMPORTER_ID}::US0378331005`]).toContain('AAPL');
+  });
+
+  it('removes only this importer’s selected remembered mapping', () => {
+    const original = {
+      ...emptyMapping(),
+      symbolMappings: {
+        'degiro-importer::US0378331005': JSON.stringify({ symbol: 'AAPL' }),
+        'degiro-importer::IE00B4L5Y983': JSON.stringify({ symbol: 'IWDA' }),
+        'revolut-importer::US0378331005': JSON.stringify({ symbol: 'AAPL' }),
+      },
+    };
+
+    const updated = withoutSavedMapping(original, 'US0378331005');
+
+    expect(updated.symbolMappings['degiro-importer::US0378331005']).toBeUndefined();
+    expect(updated.symbolMappings['degiro-importer::IE00B4L5Y983']).toBeDefined();
+    expect(updated.symbolMappings['revolut-importer::US0378331005']).toBeDefined();
+    expect(original.symbolMappings['degiro-importer::US0378331005']).toBeDefined();
   });
 });

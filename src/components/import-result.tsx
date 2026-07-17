@@ -13,9 +13,14 @@ import type { ImportResultSummary } from '../state/import-state';
 export interface ImportResultProps {
   result: ImportResultSummary;
   onReset: () => void;
+  onReviewMappings: () => void;
 }
 
-export function ImportResult({ result, onReset }: ImportResultProps): ReactElement {
+export function ImportResult({
+  result,
+  onReset,
+  onReviewMappings,
+}: ImportResultProps): ReactElement {
   const hasFatal = !!result.fatal;
   const hasFailures = result.failed > 0;
 
@@ -34,6 +39,10 @@ export function ImportResult({ result, onReset }: ImportResultProps): ReactEleme
           <div>
             <p className="text-sm font-medium text-destructive">Fatal error</p>
             <p className="text-sm text-muted-foreground mt-0.5">{result.fatal}</p>
+            <p className="text-sm text-muted-foreground mt-2">
+              The host rejected the bulk request before it returned row-level results. The importer
+              did not retry automatically, so it cannot create a partial or duplicate import.
+            </p>
           </div>
         </div>
       ) : (
@@ -52,7 +61,14 @@ export function ImportResult({ result, onReset }: ImportResultProps): ReactEleme
         <Stat label="Blocked" value={result.blocked} />
       </div>
 
-      {hasFailures ? (
+      {hasFatal ? (
+        <div className="flex items-center gap-2">
+          <Badge variant="warning">Batch not written</Badge>
+          <span className="text-sm text-muted-foreground">
+            No per-activity outcome was returned. Review mappings and retry deliberately.
+          </span>
+        </div>
+      ) : hasFailures ? (
         <div className="flex items-center gap-2">
           <Badge variant="warning">{result.failed} failed</Badge>
           <span className="text-sm text-muted-foreground">
@@ -77,7 +93,12 @@ export function ImportResult({ result, onReset }: ImportResultProps): ReactEleme
         </div>
       ) : null}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-3">
+        {hasFatal ? (
+          <Button variant="outline" onClick={onReviewMappings} data-testid="review-mappings-button">
+            Review mappings
+          </Button>
+        ) : null}
         <Button onClick={onReset} data-testid="reset-button">
           <RotateCcw className="h-4 w-4 mr-1" />
           Start over

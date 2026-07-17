@@ -113,4 +113,52 @@ describe('DEGIRO importer page', () => {
       reader.restore();
     }
   });
+
+  it('lets the user replace a stale remembered mapping instead of leaving it blocked', async () => {
+    const host = createFakeHost({
+      searchResults: DEFAULT_SEARCH_RESULTS,
+      importMapping: {
+        accountId: 'acct-1',
+        fieldMappings: {},
+        activityMappings: {},
+        accountMappings: {},
+        symbolMappings: {
+          'degiro-importer::IE00B3RBWM25': JSON.stringify({
+            symbol: 'OUTDATED',
+            exchangeMic: 'XETR',
+            providerId: 'old-provider',
+          }),
+        },
+      },
+    });
+    const reader = installFileReaderMock(EXAMPLE_CSV);
+    const user = userEvent.setup();
+
+    try {
+      render(
+        <ImporterPage
+          ctx={createAddonContext(host.api)}
+          location={{ pathname: '/addon/degiro-importer', search: '', hash: '', params: {} }}
+        />,
+      );
+      await user.upload(
+        await screen.findByTestId('file-input'),
+        new File([EXAMPLE_CSV], 'synthetic.csv', { type: 'text/csv' }),
+      );
+      await user.click(await screen.findByTestId('account-select-trigger'));
+      await user.click(await screen.findByRole('option', { name: /DEGIRO.*EUR/i }));
+
+      expect(await screen.findByText(/remembered mapping belongs to this account/i)).toBeTruthy();
+      await user.click(screen.getByTestId('forget-saved-mapping-IE00B3RBWM25'));
+      await user.click(await screen.findByTestId('search-result-IE00B3RBWM25-0'));
+
+      await waitFor(() => {
+        expect(host.savedMapping?.symbolMappings['degiro-importer::IE00B3RBWM25']).toContain(
+          'VWCE',
+        );
+      });
+    } finally {
+      reader.restore();
+    }
+  });
 });

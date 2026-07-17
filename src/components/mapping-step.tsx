@@ -31,6 +31,8 @@ export interface MappingStepProps {
   onSearchSymbol: (sourceTickerOrIsin: string) => void;
   /** Called when the user manually confirms a search result by index. */
   onConfirmSymbol: (sourceTickerOrIsin: string, resultIndex: number) => void;
+  /** Remove an obsolete remembered mapping and start a fresh search. */
+  onForgetSavedMapping: (sourceTickerOrIsin: string) => void;
   /** Accept all unresolved symbols with exactly one fresh search result. */
   onAcceptAllSuggested: () => Promise<void>;
   /** Whether a search is in progress for a symbol. */
@@ -60,6 +62,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
     symbolResolutions,
     onSearchSymbol,
     onConfirmSymbol,
+    onForgetSavedMapping,
     onAcceptAllSuggested,
     searchingFor,
     searchResults,
@@ -126,6 +129,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
                 resolution={symbolResolutions[sym] ?? { status: 'pending' }}
                 onSearch={() => onSearchSymbol(sym)}
                 onConfirm={(idx) => onConfirmSymbol(sym, idx)}
+                onForgetSavedMapping={() => onForgetSavedMapping(sym)}
                 searching={searchingFor === sym || acceptingSuggestedMappings}
                 searchResults={searchResults?.symbol === sym ? searchResults.results : null}
               />
@@ -203,6 +207,7 @@ interface SymbolRowProps {
   resolution: SymbolResolution;
   onSearch: () => void;
   onConfirm: (resultIndex: number) => void;
+  onForgetSavedMapping: () => void;
   searching: boolean;
   searchResults:
     { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] | null;
@@ -213,6 +218,7 @@ function SymbolRow({
   resolution,
   onSearch,
   onConfirm,
+  onForgetSavedMapping,
   searching,
   searchResults,
 }: SymbolRowProps): ReactElement {
@@ -277,6 +283,29 @@ function SymbolRow({
         <p className="text-xs text-destructive" data-testid={`no-results-${symbol}`}>
           No results found. This symbol blocks the import.
         </p>
+      ) : null}
+
+      {resolution.status === 'blocked' &&
+      resolution.reason ===
+        'Saved mapping does not match any current search result; review required' ? (
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          <p className="text-xs text-muted-foreground">
+            This remembered mapping belongs to this account but is no longer current. Search and
+            choose a replacement, or remove it before trying again.
+          </p>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              onForgetSavedMapping();
+              setShowResults(true);
+            }}
+            disabled={searching}
+            data-testid={`forget-saved-mapping-${symbol}`}
+          >
+            Remove remembered mapping
+          </Button>
+        </div>
       ) : null}
     </div>
   );

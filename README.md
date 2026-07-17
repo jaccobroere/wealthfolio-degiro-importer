@@ -48,6 +48,8 @@ Saved mappings are scoped to the selected Wealthfolio account. Repeating the
 same import, or importing overlapping date ranges, is protected by stable row
 fingerprints and import checks. If Wealthfolio rejects a draft, the importer
 shows safe row-level diagnostics without exposing statement data.
+When a remembered mapping no longer matches Wealthfolio's current search,
+the mapping step shows that status and lets you remove it or select a replacement.
 
 ## What is supported
 

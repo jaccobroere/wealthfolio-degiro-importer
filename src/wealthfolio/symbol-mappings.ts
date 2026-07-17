@@ -94,6 +94,23 @@ export function withSavedMapping(
 }
 
 /**
+ * Remove this add-on's remembered mapping for one source identifier.
+ *
+ * Mappings are retained by Wealthfolio per destination account. Removing an
+ * obsolete entry must therefore preserve every other importer and symbol
+ * mapping in the same host-owned document.
+ */
+export function withoutSavedMapping(
+  mapping: ImportMappingData,
+  sourceTickerOrIsin: string,
+): ImportMappingData {
+  const key = mappingKey(sourceTickerOrIsin);
+  const symbolMappings = { ...(mapping.symbolMappings ?? {}) };
+  delete symbolMappings[key];
+  return { ...mapping, symbolMappings };
+}
+
+/**
  * Convert a `SymbolSearchResult` to a `CanonicalIdentity`.
  */
 export function resultToIdentity(result: SymbolSearchResult): CanonicalIdentity {
