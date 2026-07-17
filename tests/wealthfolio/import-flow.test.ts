@@ -2,17 +2,14 @@
  * Idempotent import flow tests for the DEGIRO adapter.
  *
  * Proves with a fake/in-memory HostAPI:
- * 1. Identical second import performs zero `saveMany` creates.
- * 2. Overlapping import creates only new rows.
- * 3. Failed/partial `saveMany` never marks failed fingerprints as imported.
- * 4. Each add-on ignores the other's metadata.
- * 5. `saveMany` is always called with `{ creates }` (never a bare array);
- *    `deleteIds` is never produced; metadata is non-sensitive.
+ * 1. Reviewed rows are committed through `activities.import`, never saveMany.
+ * 2. Wealthfolio owns duplicate outcomes for import-API writes.
+ * 3. Rejected/incomplete imports never mark fingerprints as imported.
+ * 4. Legacy add-on metadata remains scoped to its owning importer.
  */
 import { describe, expect, it } from 'vitest';
 
 import type { ActivityDraft } from '../../src/domain/activity-draft';
-import { IMPORTER_ID } from '../../src/wealthfolio/types';
 import { runImport } from '../../src/wealthfolio/import';
 import { buildDuplicateIndex } from '../../src/wealthfolio/duplicate-index';
 import { createFakeHost, foreignSeededActivity, seededActivity } from './fake-host';
@@ -71,37 +68,35 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.failedFingerprints).toHaveLength(0);
     expect(result.skippedDuplicates).toBe(0);
     expect(result.fatal).toBeUndefined();
-    expect(host.saveManyCalls).toHaveLength(1);
-    // saveMany always called with { creates } shape.
-    expect(host.saveManyCalls[0].request.creates).toHaveLength(2);
-    expect(host.saveManyCalls[0].request.deleteIds).toBeUndefined();
-    expect(host.saveManyCalls[0].request.updates).toBeUndefined();
+    expect(host.saveManyCalls).toHaveLength(0);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.importCalls[0]).toHaveLength(2);
+    expect(host.importCalls[0]?.every((activity) => activity.isDraft === false)).toBe(true);
   });
 
-  it('identical second import performs zero saveMany creates', async () => {
+  it('identical second import delegates duplicate detection to the host import workflow', async () => {
     const host = createFakeHost();
     const drafts = [buyDraft(), dividendDraft()];
 
     // First import.
     await runImport(host.api, 'acct-1', drafts);
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(1);
 
-    // Second identical import: fingerprints already present.
+    // The host owns duplicate detection for import-API writes.
     const result2 = await runImport(host.api, 'acct-1', drafts);
 
-    expect(result2.attempted).toBe(0);
+    expect(result2.attempted).toBe(2);
     expect(result2.created).toBe(0);
     expect(result2.importedFingerprints).toHaveLength(0);
     expect(result2.skippedDuplicates).toBe(2);
-    // No additional saveMany call.
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(2);
   });
 
   it('overlapping import creates only new rows', async () => {
     const host = createFakeHost();
     const firstDrafts = [buyDraft(), dividendDraft()];
     await runImport(host.api, 'acct-1', firstDrafts);
-    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(1);
 
     // Overlapping import: same BUY + a new FEE.
     const feeDraft: ActivityDraft = {
@@ -121,16 +116,16 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     const overlap = [buyDraft(), feeDraft];
     const result2 = await runImport(host.api, 'acct-1', overlap);
 
-    expect(result2.attempted).toBe(1);
+    expect(result2.attempted).toBe(2);
     expect(result2.created).toBe(1);
     expect(result2.skippedDuplicates).toBe(1);
     expect(result2.importedFingerprints).toHaveLength(1);
-    expect(host.saveManyCalls).toHaveLength(2);
-    expect(host.saveManyCalls[1].request.creates).toHaveLength(1);
+    expect(host.importCalls).toHaveLength(2);
+    expect(host.importCalls[1]).toHaveLength(2);
   });
 
-  it('failed saveMany (throw) never marks failed fingerprints as imported', async () => {
-    const host = createFakeHost({ saveManyError: new Error('host down') });
+  it('failed import never marks failed fingerprints as imported', async () => {
+    const host = createFakeHost({ importError: new Error('host down') });
     const drafts = [buyDraft(), dividendDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
@@ -146,29 +141,30 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(host.storedActivities).toHaveLength(0);
   });
 
-  it('partial saveMany (errors non-empty) never marks failed fingerprints as imported', async () => {
-    // Simulate the first create failing.
-    const host = createFakeHost({ saveManyErrorCount: 1 });
+  it('import-time validation failure returns safe diagnostics without a partial write', async () => {
+    const host = createFakeHost({ importValidationErrorCount: 1 });
     const drafts = [buyDraft(), dividendDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
 
     expect(result.attempted).toBe(2);
-    expect(result.created).toBe(1);
-    expect(result.importedFingerprints).toHaveLength(1);
-    expect(result.failedFingerprints).toHaveLength(1);
-    expect(result.fatal).toBeUndefined();
+    expect(result.created).toBe(0);
+    expect(result.importedFingerprints).toHaveLength(0);
+    expect(result.failedFingerprints).toHaveLength(2);
+    expect(result.fatal).toBe(
+      'Wealthfolio did not return a complete import outcome. No automatic retry was made.',
+    );
     expect(result.failures).toEqual([
       {
         sourceRowNumbers: [42],
         message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
       },
     ]);
-    // Only the successful activity is stored.
-    expect(host.storedActivities).toHaveLength(1);
+    // The fake verifies the adapter does not manufacture a second write.
+    expect(host.storedActivities).toHaveLength(0);
   });
 
-  it('saves the complete asset resolution returned by checkImport', async () => {
+  it('submits the complete checked asset resolution through the import API', async () => {
     const host = createFakeHost({
       checkImportTransform: (activities) =>
         activities.map((activity) => ({
@@ -186,16 +182,15 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     const result = await runImport(host.api, 'acct-1', [buyDraft()]);
 
     expect(result.created).toBe(1);
-    expect(host.saveManyCalls[0]?.request.creates?.[0]).toMatchObject({
-      asset: {
-        symbol: 'AAPL',
-        exchangeMic: 'XNAS',
-        quoteCcy: 'USD',
-        instrumentType: 'EQUITY',
-        quoteMode: 'MARKET',
-        providerId: 'yahoo',
-        providerSymbol: 'AAPL',
-      },
+    expect(host.importCalls[0]?.[0]).toMatchObject({
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+      quoteMode: 'MARKET',
+      providerId: 'yahoo',
+      providerSymbol: 'AAPL',
+      isDraft: false,
     });
   });
 
@@ -223,7 +218,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.fatal).toBe(
       'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.',
     );
-    expect(host.saveManyCalls).toHaveLength(0);
+    expect(host.importCalls).toHaveLength(0);
   });
 
   it('each add-on ignores the other importer metadata', async () => {
@@ -258,45 +253,17 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(indexOnlyTheirs.importedFingerprints.has(fp)).toBe(false);
   });
 
-  it('saveMany is always called with { creates } and never deleteIds', async () => {
+  it('uses activities.import and never calls the low-level bulk editor endpoint', async () => {
     const host = createFakeHost();
     await runImport(host.api, 'acct-1', [buyDraft()]);
-    expect(host.saveManyCalls).toHaveLength(1);
-    const req = host.saveManyCalls[0].request;
-    expect(Array.isArray(req.creates)).toBe(true);
-    expect(req.deleteIds).toBeUndefined();
-    expect(req.updates).toBeUndefined();
-    // Sanity: the request object is NOT a bare array.
-    expect(Array.isArray(host.saveManyCalls[0].request)).toBe(false);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.saveManyCalls).toHaveLength(0);
   });
 
-  it('metadata is non-sensitive (no raw rows, balances, filenames, or paths)', async () => {
+  it('does not attach add-on provenance metadata to the host import payload', async () => {
     const host = createFakeHost();
     await runImport(host.api, 'acct-1', [buyDraft()]);
 
-    const meta = host.storedActivities[0].metadata as Record<string, unknown> | undefined;
-    expect(meta).toBeDefined();
-    expect(meta?.importerId).toBe(IMPORTER_ID);
-    expect(meta?.sourceFingerprint).toBeTruthy();
-    expect(meta?.sourceRowNumbers).toEqual([42]);
-    // Forbidden fields must never appear.
-    expect(meta?.rawRow).toBeUndefined();
-    expect(meta?.rawRecord).toBeUndefined();
-    expect(meta?.balance).toBeUndefined();
-    expect(meta?.filename).toBeUndefined();
-    expect(meta?.path).toBeUndefined();
-    expect(meta?.statementPath).toBeUndefined();
-  });
-
-  it('serializes provenance metadata for the host bulk wire DTO', async () => {
-    const host = createFakeHost();
-    await runImport(host.api, 'acct-1', [buyDraft()]);
-
-    const metadata = host.saveManyCalls[0].request.creates?.[0].metadata;
-    expect(typeof metadata).toBe('string');
-    expect(JSON.parse(metadata as string)).toMatchObject({
-      importerId: IMPORTER_ID,
-      sourceRowNumbers: [42],
-    });
+    expect(host.importCalls[0]?.[0]).not.toHaveProperty('metadata');
   });
 });

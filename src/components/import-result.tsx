@@ -1,7 +1,7 @@
 /**
  * Import result.
  *
- * Shows the outcome of `saveMany({ creates })`: created count, skipped
+ * Shows the outcome of Wealthfolio's reviewed import: created count, skipped
  * duplicates, blocked rows, and any fatal error. Offers a reset to start
  * over.
  */
@@ -40,8 +40,9 @@ export function ImportResult({
             <p className="text-sm font-medium text-destructive">Fatal error</p>
             <p className="text-sm text-muted-foreground mt-0.5">{result.fatal}</p>
             <p className="text-sm text-muted-foreground mt-2">
-              The host rejected the bulk request before it returned row-level results. The importer
-              did not retry automatically, so it cannot create a partial or duplicate import.
+              The host rejected the reviewed import before it returned a complete result. The
+              importer did not retry automatically, so it cannot create a partial or duplicate
+              import.
             </p>
           </div>
         </div>
