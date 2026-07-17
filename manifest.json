@@ -1,7 +1,7 @@
 {
   "id": "degiro-importer",
   "name": "DEGIRO Importer",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "sdkVersion": "3.6.1",
   "minWealthfolioVersion": "3.6.1",
   "description": "Import account statements from DEGIRO. Supports buys, sells, dividends, taxes, deposits, withdrawals, fees and interest, with explicit symbol review and duplicate-safe imports.",
@@ -24,8 +24,8 @@
   "permissions": [
     {
       "category": "ui",
-      "functions": ["router.add", "onDisable"],
-      "purpose": "Register the importer route and release addon state on disable"
+      "functions": ["sidebar.addItem", "router.add", "onDisable"],
+      "purpose": "Register the importer sidebar entry and route, then release addon state on disable"
     },
     {
       "category": "accounts",
@@ -42,19 +42,5 @@
       "functions": ["searchTicker"],
       "purpose": "Resolve ISINs to exchange instruments during the explicit symbol mapping step"
     }
-  ],
-  "contributes": {
-    "routes": [{ "id": "main" }],
-    "links": {
-      "sidebar": [
-        {
-          "id": "main-nav",
-          "route": "main",
-          "label": "DEGIRO Import",
-          "icon": "files",
-          "order": 100
-        }
-      ]
-    }
-  }
+  ]
 }

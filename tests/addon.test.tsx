@@ -2,9 +2,8 @@
  * Addon sandbox lifecycle proof (3.6.1 render-callback model).
  *
  * Verifies the documented SDK contract from `docs/SDK-CONTRACT.md`:
- *  1. `enable(ctx)` registers exactly one route (sidebar navigation is
- *     manifest-declared via `contributes.links.sidebar`, so the runtime does
- *     NOT call `ctx.sidebar.addItem`).
+ *  1. `enable(ctx)` registers the Wealthfolio 3.6.1 runtime sidebar item and
+ *     exactly one route.
  *  2. Multiple `render({ root, location })` calls invoke `createRoot` exactly
  *     once and reuse the same root.
  *  3. The undocumented `onRendered` host acknowledgement is called after each
@@ -14,9 +13,8 @@
  *     cleared).
  *
  * Plus static checks that `src/addon.tsx` and `manifest.json` use the
- * manifest-declared navigation + 3.6.1 render model (contributes present,
- * runtime route id matches manifest route id, no singular `/addon/` path, no
- * `sidebar.addItem`, route uses `render`).
+ * the 3.6.1 runtime navigation and render model (singular `/addon/` route,
+ * runtime sidebar item, and `render` callback).
  *
  * `react-dom/client` is mocked so `createRoot` is a spy returning a fake root.
  *
@@ -60,7 +58,7 @@ interface FakeCtx {
 
 function createFakeCtx(): FakeCtx {
   return {
-    sidebar: { addItem: vi.fn() },
+    sidebar: { addItem: vi.fn(() => ({ remove: vi.fn() })) },
     router: { add: vi.fn() },
     onDisable: vi.fn(),
     api: {},
@@ -68,7 +66,7 @@ function createFakeCtx(): FakeCtx {
 }
 
 const fakeLocation: AddonRouteLocation = {
-  pathname: '/addons/degiro-importer',
+  pathname: '/addon/degiro-importer',
   search: '',
   hash: '',
   params: {},
@@ -96,12 +94,18 @@ describe('addon sandbox lifecycle (3.6.1 render model)', () => {
     enable(ctx as unknown as AddonContext);
   });
 
-  it('registers exactly one route and does not call sidebar.addItem', () => {
-    expect(ctx.sidebar.addItem).not.toHaveBeenCalled();
+  it('registers the sidebar item and exactly one route', () => {
+    expect(ctx.sidebar.addItem).toHaveBeenCalledWith({
+      id: 'degiro-importer',
+      label: 'DEGIRO Import',
+      icon: 'files',
+      route: '/addon/degiro-importer',
+      order: 100,
+    });
     expect(ctx.router.add).toHaveBeenCalledTimes(1);
     expect(routeConfig).toBeDefined();
     expect(routeConfig!.id).toBe('main');
-    expect(routeConfig!.path).toBe('/addons/degiro-importer');
+    expect(routeConfig!.path).toBe('/addon/degiro-importer');
     expect(typeof routeConfig!.render).toBe('function');
   });
 
@@ -153,23 +157,10 @@ describe('addon static contract', () => {
   const addonSrc = readFileSync(resolve(__dirname, '../src/addon.tsx'), 'utf8');
   const manifestSrc = readFileSync(resolve(__dirname, '../manifest.json'), 'utf8');
   const manifest = JSON.parse(manifestSrc) as {
-    contributes?: { routes?: { id: string }[]; links?: { sidebar?: { route: string }[] } };
     permissions?: { category: string; functions: string[] }[];
   };
 
-  it('manifest.json declares contributes with a "main" route', () => {
-    expect(manifest.contributes).toBeDefined();
-    expect(manifest.contributes!.routes!.map((r) => r.id)).toContain('main');
-  });
-
-  it('manifest.json sidebar links reference a declared route', () => {
-    const routeIds = new Set(manifest.contributes!.routes!.map((r) => r.id));
-    for (const link of manifest.contributes!.links!.sidebar!) {
-      expect(routeIds.has(link.route)).toBe(true);
-    }
-  });
-
-  it('runtime route id matches the manifest route id', () => {
+  it('runtime route id is stable', () => {
     const constMatch = addonSrc.match(/const\s+ROUTE_ID\s*=\s*['"]([^'"]+)['"]/);
     const literal = addonSrc.match(/ctx\.router\.add\(\s*\{[^}]*\bid:\s*['"]([^'"]+)['"]/s);
     const ref = addonSrc.match(/ctx\.router\.add\(\s*\{[^}]*\bid:\s*([A-Za-z_$][\w$]*)/s);
@@ -177,17 +168,17 @@ describe('addon static contract', () => {
     expect(runtimeId).toBe('main');
   });
 
-  it('src/addon.tsx has no singular "/addon/" legacy path', () => {
-    expect(addonSrc).not.toMatch(/['"]\/addon\//);
+  it('src/addon.tsx uses the Wealthfolio 3.6.1 route namespace', () => {
+    expect(addonSrc).toMatch(/['"]\/addon\/degiro-importer['"]/);
   });
 
-  it('src/addon.tsx does not call sidebar.addItem', () => {
-    expect(addonSrc).not.toMatch(/sidebar\.addItem\s*\(/);
+  it('src/addon.tsx registers its sidebar item at runtime', () => {
+    expect(addonSrc).toMatch(/sidebar\.addItem\s*\(/);
   });
 
-  it('manifest.json permissions do not request sidebar.addItem', () => {
+  it('manifest.json requests sidebar.addItem permission', () => {
     const ui = manifest.permissions!.find((p) => p.category === 'ui');
-    expect(ui?.functions).not.toContain('sidebar.addItem');
+    expect(ui?.functions).toContain('sidebar.addItem');
   });
 
   it('src/addon.tsx imports createRoot from react-dom/client', () => {

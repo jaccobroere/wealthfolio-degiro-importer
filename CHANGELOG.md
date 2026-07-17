@@ -5,6 +5,12 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 1.2.2
+
+- Restored the runtime sidebar entry and `/addon/degiro-importer` route required
+  by the Wealthfolio 3.6.1 host. This makes the importer visible and reachable
+  after installation.
+
 ## 1.2.1
 
 - Same as 1.2.0 (the v1.2.0 tag was burned: its release workflow failed on an
