@@ -67,6 +67,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     results: CompactSearchResult[];
   } | null>(null);
   const [loadingMappings, setLoadingMappings] = useState(false);
+  const [acceptingSuggestedMappings, setAcceptingSuggestedMappings] = useState(false);
 
   // Load accounts on mount.
   useEffect(() => {
@@ -119,24 +120,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
             try {
               const results = await searchTicker(ctx.api, sym);
               const outcome = resolveSymbol(sym, saved, results);
-              if (outcome.status === 'resolved') {
-                resolutions[sym] = {
-                  status: 'resolved',
-                  mapping: {
-                    sourceTickerOrIsin: sym,
-                    symbol: outcome.identity.symbol,
-                    ...(outcome.identity.exchangeMic
-                      ? { exchangeMic: outcome.identity.exchangeMic }
-                      : {}),
-                    ...(outcome.identity.providerId
-                      ? { providerId: outcome.identity.providerId }
-                      : {}),
-                    fromSaved: outcome.fromSaved,
-                  },
-                };
-              } else {
-                resolutions[sym] = outcomeToResolution(outcome);
-              }
+              resolutions[sym] = outcomeToResolution(sym, outcome);
             } catch {
               resolutions[sym] = { status: 'pending' };
             }
@@ -200,14 +184,13 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           return;
         }
 
-        // New mappings always require an explicit user confirmation, even when
-        // the search returns a single candidate. Exact saved mappings may be
-        // auto-applied earlier in the account/mapping effect after
-        // re-verification.
         dispatch({
           type: 'RESOLVE_SYMBOL',
           sourceTickerOrIsin,
-          resolution: { status: 'pending' },
+          resolution:
+            results.length > 1
+              ? { status: 'ambiguous', candidateCount: results.length }
+              : { status: 'pending' },
         });
       })
       .catch(() => {
@@ -233,21 +216,13 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       ...(result.providerSymbol ? { providerSymbol: result.providerSymbol } : {}),
       ...(result.kind ? { kind: result.kind } : {}),
     };
-    const mapping: ResolvedMapping = {
-      sourceTickerOrIsin,
-      symbol: identity.symbol,
-      ...(identity.exchangeMic ? { exchangeMic: identity.exchangeMic } : {}),
-      ...(identity.providerId ? { providerId: identity.providerId } : {}),
-      ...(identity.quoteCcy ? { quoteCcy: identity.quoteCcy } : {}),
-      ...(identity.instrumentType ? { instrumentType: identity.instrumentType } : {}),
-      ...(identity.providerSymbol ? { providerSymbol: identity.providerSymbol } : {}),
-      ...(identity.kind ? { kind: identity.kind } : {}),
-      fromSaved: false,
-    };
     dispatch({
       type: 'RESOLVE_SYMBOL',
       sourceTickerOrIsin,
-      resolution: { status: 'resolved', mapping },
+      resolution: {
+        status: 'resolved',
+        mapping: toResolvedMapping(sourceTickerOrIsin, identity, false),
+      },
     });
 
     // Persist the confirmed mapping.
@@ -260,6 +235,67 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
         .catch(() => {
           // Non-fatal: mapping not persisted; will need re-confirmation next time.
         });
+    }
+  }
+
+  /**
+   * Accept every unresolved source security whose fresh host search returns
+   * exactly one canonical result. Existing saved/manual mappings are never
+   * overwritten; no-result and multi-result searches remain for review.
+   */
+  async function handleAcceptAllSuggestedMappings(): Promise<void> {
+    if (!ctx || !state.accountId || acceptingSuggestedMappings) return;
+
+    setAcceptingSuggestedMappings(true);
+    try {
+      let existingMapping: Awaited<ReturnType<typeof getImportMapping>> | null = null;
+      let saved = new Map<string, CanonicalIdentity>();
+      try {
+        existingMapping = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
+        saved = readSavedMappings(existingMapping);
+      } catch {
+        // Resolution remains useful when persistence is temporarily unavailable.
+        // Do not overwrite an unknown mapping document.
+      }
+
+      const resolutions = { ...state.symbolResolutions };
+      const newlyConfirmed: [string, CanonicalIdentity][] = [];
+      for (const sourceTickerOrIsin of state.instrumentSymbols) {
+        if (
+          resolutions[sourceTickerOrIsin]?.status === 'resolved' ||
+          saved.has(sourceTickerOrIsin)
+        ) {
+          continue;
+        }
+
+        try {
+          const results = await searchTicker(ctx.api, sourceTickerOrIsin);
+          const outcome = resolveSymbol(sourceTickerOrIsin, saved, results);
+          resolutions[sourceTickerOrIsin] = outcomeToResolution(sourceTickerOrIsin, outcome);
+          if (outcome.status === 'resolved' && !outcome.fromSaved) {
+            newlyConfirmed.push([sourceTickerOrIsin, outcome.identity]);
+          }
+        } catch {
+          resolutions[sourceTickerOrIsin] = { status: 'blocked', reason: 'Search failed' };
+        }
+      }
+
+      dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
+
+      if (existingMapping && newlyConfirmed.length > 0) {
+        const updated = newlyConfirmed.reduce(
+          (mapping, [sourceTickerOrIsin, identity]) =>
+            withSavedMapping(mapping, sourceTickerOrIsin, identity),
+          existingMapping,
+        );
+        try {
+          await ctx.api.activities.saveImportMapping(updated);
+        } catch {
+          // Non-fatal: accepted mappings stay available for this import.
+        }
+      }
+    } finally {
+      setAcceptingSuggestedMappings(false);
     }
   }
 
@@ -350,9 +386,11 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           symbolResolutions={state.symbolResolutions}
           onSearchSymbol={handleSearchSymbol}
           onConfirmSymbol={handleConfirmSymbol}
+          onAcceptAllSuggested={handleAcceptAllSuggestedMappings}
           searchingFor={searchingFor}
           searchResults={searchResults}
           loadingMappings={loadingMappings}
+          acceptingSuggestedMappings={acceptingSuggestedMappings}
           onContinue={() => dispatch({ type: 'GOTO_STEP', step: 'review' })}
           onBack={() => dispatch({ type: 'RESET_UPLOAD' })}
         />
@@ -410,26 +448,15 @@ interface CompactSearchResult {
 }
 
 /** Convert a `ResolutionOutcome` to a UI `SymbolResolution`. */
-function outcomeToResolution(outcome: ReturnType<typeof resolveSymbol>): SymbolResolution {
+function outcomeToResolution(
+  sourceTickerOrIsin: string,
+  outcome: ReturnType<typeof resolveSymbol>,
+): SymbolResolution {
   switch (outcome.status) {
     case 'resolved':
       return {
         status: 'resolved',
-        mapping: {
-          sourceTickerOrIsin: '',
-          symbol: outcome.identity.symbol,
-          ...(outcome.identity.exchangeMic ? { exchangeMic: outcome.identity.exchangeMic } : {}),
-          ...(outcome.identity.providerId ? { providerId: outcome.identity.providerId } : {}),
-          ...(outcome.identity.quoteCcy ? { quoteCcy: outcome.identity.quoteCcy } : {}),
-          ...(outcome.identity.instrumentType
-            ? { instrumentType: outcome.identity.instrumentType }
-            : {}),
-          ...(outcome.identity.providerSymbol
-            ? { providerSymbol: outcome.identity.providerSymbol }
-            : {}),
-          ...(outcome.identity.kind ? { kind: outcome.identity.kind } : {}),
-          fromSaved: outcome.fromSaved,
-        },
+        mapping: toResolvedMapping(sourceTickerOrIsin, outcome.identity, outcome.fromSaved),
       };
     case 'ambiguous':
       return { status: 'ambiguous', candidateCount: outcome.results.length };
@@ -438,6 +465,25 @@ function outcomeToResolution(outcome: ReturnType<typeof resolveSymbol>): SymbolR
     case 'blocked':
       return { status: 'blocked', reason: outcome.reason };
   }
+}
+
+/** Convert a verified canonical identity into the wizard's resolved mapping. */
+function toResolvedMapping(
+  sourceTickerOrIsin: string,
+  identity: CanonicalIdentity,
+  fromSaved: boolean,
+): ResolvedMapping {
+  return {
+    sourceTickerOrIsin,
+    symbol: identity.symbol,
+    ...(identity.exchangeMic ? { exchangeMic: identity.exchangeMic } : {}),
+    ...(identity.providerId ? { providerId: identity.providerId } : {}),
+    ...(identity.quoteCcy ? { quoteCcy: identity.quoteCcy } : {}),
+    ...(identity.instrumentType ? { instrumentType: identity.instrumentType } : {}),
+    ...(identity.providerSymbol ? { providerSymbol: identity.providerSymbol } : {}),
+    ...(identity.kind ? { kind: identity.kind } : {}),
+    fromSaved,
+  };
 }
 
 /** Stepper indicator. */

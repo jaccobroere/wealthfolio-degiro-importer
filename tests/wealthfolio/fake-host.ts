@@ -225,7 +225,14 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     toast: {} as never,
   } as unknown as HostAPI;
 
-  return { api, saveManyCalls, storedActivities, savedMapping };
+  return {
+    api,
+    saveManyCalls,
+    storedActivities,
+    get savedMapping() {
+      return savedMapping;
+    },
+  };
 }
 
 /** Build a seeded `ActivityDetails` with this importer's metadata. */
