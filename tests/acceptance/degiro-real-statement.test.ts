@@ -11,7 +11,7 @@ type Baseline = {
   activityCount: number;
   byActivityType: Record<string, number>;
   localizedBuyQuantities: string[];
-  buyDraftsWithAccruedInterest: number;
+  accruedInterestSettlementCount: number;
   accruedInterestSourceRowCount: number;
   unsupported: number;
   invalid: number;
@@ -47,13 +47,13 @@ describe('DEGIRO local acceptance gate', () => {
       .map((a) => a.quantity);
     for (const quantity of baseline.localizedBuyQuantities) expect(quantities).toContain(quantity);
     expect(
-      result.batch.activities.filter((a) => a.activityType === 'BUY' && a.accruedInterest),
-    ).toHaveLength(baseline.buyDraftsWithAccruedInterest);
+      result.batch.activities.filter((a) => a.activityType === 'FEE' && a.accruedInterest),
+    ).toHaveLength(baseline.accruedInterestSettlementCount);
     expect(result.reconciliation.accruedInterestSourceRowCount).toBe(
       baseline.accruedInterestSourceRowCount,
     );
-    expect(result.reconciliation.buyDraftsWithAccruedInterestCount).toBe(
-      baseline.buyDraftsWithAccruedInterest,
+    expect(result.reconciliation.accruedInterestSettlementCount).toBe(
+      baseline.accruedInterestSettlementCount,
     );
   });
   it('is deterministic across repeated parses', async () => {

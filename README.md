@@ -53,7 +53,8 @@ The importer understands the DEGIRO account-statement schema in Dutch and
 English header variants, including localized numeric values. Supported
 activity families include:
 
-- buys and sells, including grouped order fees and accrued-interest rows;
+- buys and sells, including grouped order fees and accrued-interest rows (recorded as separate
+  cash settlements so bond purchase cost basis is unchanged);
 - dividends, taxes, fees, deposits, withdrawals, and account interest;
 - foreign-exchange rows used by the statement format.
 

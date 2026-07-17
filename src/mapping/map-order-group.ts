@@ -1,6 +1,7 @@
 /**
  * Order-id group mapping: aggregate partial fills, derive a cash-consistent
- * effective unit price, merge broker fees, preserve accrued interest.
+ * effective unit price, merge broker fees, and emit accrued-interest cash
+ * settlements without changing the BUY's cost basis.
  *
  * Pure core: no React, no `Wealthfolio addon SDK`. All arithmetic uses
  * `decimal.js` over decimal strings.
@@ -33,8 +34,8 @@ export interface OrderGroupResult {
 /**
  * Process all rows sharing one order id. Produces one aggregated BUY/SELL
  * activity (partial fills summed with Decimal, effective unit price derived from
- * authoritative mutation totals, broker fees merged and currency-converted) and
- * one TAX activity per in-group FTT charge.
+ * authoritative mutation totals, broker fees merged and currency-converted), one
+ * cash settlement for accrued interest, and one TAX activity per in-group FTT charge.
  */
 export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): OrderGroupResult {
   const activities: ActivityDraft[] = [];
@@ -164,26 +165,45 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
     fee: totalFee.toString(),
     amount: totalAmount.toString(),
     comment: commentParts.join(' | '),
-    sourceRowNumbers: [
-      ...tradeSourceRowNumbers,
-      ...feeSourceRowNumbers,
-      ...(accrued ? accrued.sourceRowNumbers : []),
-    ],
+    sourceRowNumbers: [...tradeSourceRowNumbers, ...feeSourceRowNumbers],
     group,
-    ...(accrued
-      ? {
-          accruedInterest: {
-            sourceRowNumbers: accrued.sourceRowNumbers,
-            totalAmount: accrued.totalAmount.toString(),
-            currency: accrued.currency,
-          },
-        }
-      : {}),
     isValid: !!symbol,
     errors: symbol ? {} : { symbol: ['No symbol found for this trade'] },
     warnings: {},
   };
   activities.push(tradeActivity);
+
+  // Wealthfolio 3.6.1 has no accrued-interest field on a BUY. Keep the
+  // principal and purchase cost basis intact, and represent the broker's cash
+  // settlement separately. A positive amount is a reversal/refund, so it is a
+  // CREDIT rather than a negative fee.
+  const accruedSettlementActivityIndex = accrued
+    ? activityIndexOffset + activities.length
+    : undefined;
+  if (accrued) {
+    const settlementAmount = accrued.totalAmount.abs();
+    activities.push({
+      date: toIsoDate(firstTrade.date, firstTrade.time),
+      symbol: cashSymbol(accrued.currency),
+      quantity: '1',
+      activityType: accrued.totalAmount.isNegative() ? 'FEE' : 'CREDIT',
+      unitPrice: settlementAmount.toString(),
+      currency: accrued.currency,
+      fee: '0',
+      amount: settlementAmount.toString(),
+      comment: 'DEGIRO accrued interest settlement on bond purchase',
+      sourceRowNumbers: accrued.sourceRowNumbers,
+      group,
+      accruedInterest: {
+        sourceRowNumbers: accrued.sourceRowNumbers,
+        totalAmount: accrued.totalAmount.toString(),
+        currency: accrued.currency,
+      },
+      isValid: true,
+      errors: {},
+      warnings: {},
+    });
+  }
 
   // One membership per contributing row, with its precise role.
   for (const row of tradeRows) {
@@ -195,7 +215,7 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   for (const row of accruedRows) {
     memberships.push({
       rowIndex: row.rowIndex,
-      activityIndex: tradeActivityIndex,
+      activityIndex: accruedSettlementActivityIndex ?? tradeActivityIndex,
       role: 'accrued-interest',
     });
   }

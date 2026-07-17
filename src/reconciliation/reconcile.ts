@@ -52,8 +52,8 @@ export interface Reconciliation {
   skipReasons: Record<string, number>;
   /** Source rows not mapped to any outcome (must be 0). */
   unaccountedCount: number;
-  /** Count of grouped BUY drafts that carry accrued interest. */
-  buyDraftsWithAccruedInterestCount: number;
+  /** Count of explicit cash settlements created from accrued-interest rows. */
+  accruedInterestSettlementCount: number;
 }
 
 const INTERNAL_CASH_SKIP_REASONS: ReadonlySet<SkipReason> = new Set<SkipReason>([
@@ -87,7 +87,6 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
 
   let accruedActivityCount = 0;
   const accruedSourceRows = new Set<number>();
-  let buyWithAccrued = 0;
 
   for (const a of batch.activities) {
     // Positions: BUY/SELL only.
@@ -110,10 +109,9 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
       }
     }
 
-    // Accrued interest presence (grouped BUY drafts).
+    // Accrued-interest cash settlement created from a grouped bond purchase.
     if (a.accruedInterest) {
       accruedActivityCount += 1;
-      if (a.activityType === 'BUY') buyWithAccrued += 1;
       for (const r of a.accruedInterest.sourceRowNumbers) accruedSourceRows.add(r);
     }
 
@@ -173,7 +171,7 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
     knownInternalMovementCount,
     skipReasons,
     unaccountedCount: batch.summary.unaccountedCount,
-    buyDraftsWithAccruedInterestCount: buyWithAccrued,
+    accruedInterestSettlementCount: accruedActivityCount,
   };
 }
 
@@ -183,6 +181,7 @@ function signedAmountFor(a: ActivityDraft, amount: Decimal): Decimal {
     case 'DEPOSIT':
     case 'DIVIDEND':
     case 'INTEREST':
+    case 'CREDIT':
       return amount; // cash in
     case 'WITHDRAWAL':
     case 'FEE':

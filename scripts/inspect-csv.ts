@@ -106,7 +106,7 @@ function printSummary(r: Awaited<ReturnType<typeof parseAndMapWithFingerprints>>
   console.log(`currencies touched:           ${reconciliation.cashByCurrency.length}`);
   console.log(`accrued-interest activities:  ${reconciliation.accruedInterestActivityCount}`);
   console.log(`accrued-interest source rows: ${reconciliation.accruedInterestSourceRowCount}`);
-  console.log(`BUY drafts w/ accrued:  ${reconciliation.buyDraftsWithAccruedInterestCount}`);
+  console.log(`accrued settlements:         ${reconciliation.accruedInterestSettlementCount}`);
   console.log(`known internal movements:     ${reconciliation.knownInternalMovementCount}`);
 }
 

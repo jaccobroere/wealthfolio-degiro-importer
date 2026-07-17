@@ -9,7 +9,7 @@
 
 /** Wealthfolio activity types emitted by this importer. */
 export type ActivityType =
-  'BUY' | 'SELL' | 'DIVIDEND' | 'TAX' | 'DEPOSIT' | 'WITHDRAWAL' | 'INTEREST' | 'FEE';
+  'BUY' | 'SELL' | 'DIVIDEND' | 'TAX' | 'DEPOSIT' | 'WITHDRAWAL' | 'INTEREST' | 'FEE' | 'CREDIT';
 
 export const ACTIVITY_TYPES: readonly ActivityType[] = [
   'BUY',
@@ -20,14 +20,15 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
   'WITHDRAWAL',
   'INTEREST',
   'FEE',
+  'CREDIT',
 ];
 
 /**
  * Accrued-interest provenance for `Meegekochte Rente` rows attached to a BUY.
  *
- * The parser preserves these faithfully; the adapter decides how Wealthfolio receives
- * the amount folded into the BUY `amount`, `fee`, or another field. Until then
- * a draft carrying accrued interest is blocked from production import.
+ * Paid interest is represented as a separate cash FEE activity, so the BUY's
+ * principal and cost basis remain unchanged. A positive reversal is represented
+ * as a cash CREDIT activity.
  */
 export interface AccruedInterestProvenance {
   /** 1-based source row numbers of the contributing `Meegekochte Rente` rows. */
@@ -82,7 +83,7 @@ export interface ActivityDraft {
   sourceRowNumbers: number[];
   /** Present when this activity was derived from an order-id group. */
   group?: GroupProvenance;
-  /** Present on BUY drafts that carry `Meegekochte Rente`. */
+  /** Present on the cash settlement created for `Meegekochte Rente`. */
   accruedInterest?: AccruedInterestProvenance;
   isValid: boolean;
   errors: Record<string, string[]>;

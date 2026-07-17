@@ -445,14 +445,14 @@ export function computeConservation(state: ImportState): ConservationSummary {
 
 /**
  * Reconciliation residual rules: the import is blocked if the reconciliation
- * reports any unaccounted rows, any unsupported/invalid outcomes, or any BUY
- * drafts carrying accrued interest.
+ * reports any unaccounted rows or unsupported/invalid outcomes. Accrued
+ * interest is represented by a dedicated cash settlement draft, so it remains
+ * visible in reconciliation without blocking a valid import.
  */
 export interface ReconciliationResiduals {
   unaccountedCount: number;
   unsupportedCount: number;
   invalidCount: number;
-  buyDraftsWithAccruedInterest: number;
   /** True when all residual rules pass (no blockers from reconciliation). */
   pass: boolean;
   /** Human-readable list of failing rules. */
@@ -466,7 +466,6 @@ export function computeReconciliationResiduals(state: ImportState): Reconciliati
       unaccountedCount: 0,
       unsupportedCount: 0,
       invalidCount: 0,
-      buyDraftsWithAccruedInterest: 0,
       pass: true,
       failures: [],
     };
@@ -482,16 +481,10 @@ export function computeReconciliationResiduals(state: ImportState): Reconciliati
   if (batch.summary.invalidCount > 0) {
     failures.push(`${batch.summary.invalidCount} invalid row(s)`);
   }
-  if (reconciliation.buyDraftsWithAccruedInterestCount > 0) {
-    failures.push(
-      `${reconciliation.buyDraftsWithAccruedInterestCount} BUY draft(s) with accrued interest (host representation requires review)`,
-    );
-  }
   return {
     unaccountedCount: reconciliation.unaccountedCount,
     unsupportedCount: batch.summary.unsupportedCount,
     invalidCount: batch.summary.invalidCount,
-    buyDraftsWithAccruedInterest: reconciliation.buyDraftsWithAccruedInterestCount,
     pass: failures.length === 0,
     failures,
   };

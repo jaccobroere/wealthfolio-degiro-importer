@@ -146,11 +146,7 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
             value={reconciliation.accruedInterestActivityCount}
           />
           <Stat label="Internal cash skips" value={reconciliation.knownInternalMovementCount} />
-          <Stat
-            label="BUY w/ accrued"
-            value={reconciliation.buyDraftsWithAccruedInterestCount}
-            ok={reconciliation.buyDraftsWithAccruedInterestCount === 0}
-          />
+          <Stat label="Accrued settlements" value={reconciliation.accruedInterestSettlementCount} />
         </div>
       </section>
 

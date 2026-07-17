@@ -26,7 +26,7 @@ export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE };
  * Map a pure-core `ActivityType` (DEGIRO subset) to the SDK `ActivityType`.
  *
  * The DEGIRO pure core emits BUY, SELL, DIVIDEND, TAX, DEPOSIT, WITHDRAWAL,
- * INTEREST, FEE — all valid SDK activity types — so this is a 1:1 cast.
+ * INTEREST, FEE, CREDIT — all valid SDK activity types — so this is a 1:1 cast.
  */
 export function toSdkActivityType(type: ActivityDraft['activityType']): ActivityType {
   return type as ActivityType;
