@@ -1,7 +1,7 @@
 {
   "id": "degiro-importer",
   "name": "DEGIRO Importer",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "sdkVersion": "3.6.1",
   "minWealthfolioVersion": "3.6.1",
   "description": "Import account statements from DEGIRO. Supports buys, sells, dividends, taxes, deposits, withdrawals, fees and interest, with explicit symbol review and duplicate-safe imports.",
@@ -34,7 +34,7 @@
     },
     {
       "category": "activities",
-      "functions": ["getAll", "checkImport", "saveMany", "getImportMapping", "saveImportMapping"],
+      "functions": ["getAll", "checkImport", "import", "getImportMapping", "saveImportMapping"],
       "purpose": "Validate and import DEGIRO activities, detect prior imports, and persist ISIN-to-symbol mappings"
     },
     {

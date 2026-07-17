@@ -20,7 +20,7 @@ const expectedId = 'degiro-importer';
 const expectedPermissions: Record<string, string[]> = {
   ui: ['sidebar.addItem', 'router.add', 'onDisable'],
   accounts: ['getAll'],
-  activities: ['getAll', 'checkImport', 'saveMany', 'getImportMapping', 'saveImportMapping'],
+  activities: ['getAll', 'checkImport', 'import', 'getImportMapping', 'saveImportMapping'],
   'market-data': ['searchTicker'],
 };
 
