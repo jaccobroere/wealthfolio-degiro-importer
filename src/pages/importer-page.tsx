@@ -45,6 +45,7 @@ import {
   resolveSymbol,
   identityToAsset,
   withSavedMapping,
+  withoutSavedMapping,
   type CanonicalIdentity,
 } from '../wealthfolio/symbol-mappings';
 import { runImport } from '../wealthfolio/import';
@@ -238,6 +239,29 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     }
   }
 
+  function handleForgetSavedMapping(sourceTickerOrIsin: string): void {
+    if (!ctx || !state.accountId) return;
+
+    // Make the row immediately reviewable even if persistence is temporarily
+    // unavailable. A fresh search is still required before it can proceed.
+    dispatch({
+      type: 'RESOLVE_SYMBOL',
+      sourceTickerOrIsin,
+      resolution: { status: 'pending' },
+    });
+
+    getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
+      .then((existing) =>
+        ctx.api.activities.saveImportMapping(withoutSavedMapping(existing, sourceTickerOrIsin)),
+      )
+      .catch(() => {
+        // The stale entry remains only in the host record. It cannot be
+        // auto-applied during this open import because state now requires a
+        // fresh manual confirmation.
+      })
+      .finally(() => handleSearchSymbol(sourceTickerOrIsin));
+  }
+
   /**
    * Accept every unresolved source security whose fresh host search returns
    * exactly one canonical result. Existing saved/manual mappings are never
@@ -387,6 +411,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           symbolResolutions={state.symbolResolutions}
           onSearchSymbol={handleSearchSymbol}
           onConfirmSymbol={handleConfirmSymbol}
+          onForgetSavedMapping={handleForgetSavedMapping}
           onAcceptAllSuggested={handleAcceptAllSuggestedMappings}
           searchingFor={searchingFor}
           searchResults={searchResults}
@@ -430,7 +455,17 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       ) : null}
 
       {state.step === 'done' && state.importResult ? (
-        <ImportResult result={state.importResult} onReset={() => dispatch({ type: 'RESET' })} />
+        <ImportResult
+          result={state.importResult}
+          onReset={() => dispatch({ type: 'RESET' })}
+          onReviewMappings={() => {
+            if (!state.accountId) return;
+            // Re-selecting the account clears the reviewed mappings and
+            // acknowledgement, then re-verifies every remembered mapping.
+            dispatch({ type: 'SELECT_ACCOUNT', accountId: state.accountId });
+            dispatch({ type: 'GOTO_STEP', step: 'mapping' });
+          }}
+        />
       ) : null}
     </div>
   );
