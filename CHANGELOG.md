@@ -5,6 +5,14 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 1.2.3
+
+- Added bulk confirmation for unambiguous security mappings, represents
+  accrued-interest settlements as cash activity, and preserves checked host
+  activities through import.
+- Removed the release self-attestation artifact; release publication now relies
+  on reproducible public validation and package checks.
+
 ## 1.2.2
 
 - Restored the runtime sidebar entry and `/addon/degiro-importer` route required

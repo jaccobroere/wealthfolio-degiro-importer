@@ -1,7 +1,7 @@
 {
   "id": "degiro-importer",
   "name": "DEGIRO Importer",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "sdkVersion": "3.6.1",
   "minWealthfolioVersion": "3.6.1",
   "description": "Import account statements from DEGIRO. Supports buys, sells, dividends, taxes, deposits, withdrawals, fees and interest, with explicit symbol review and duplicate-safe imports.",
