@@ -5,6 +5,13 @@ notes live under [`docs/releases/`](docs/releases/).
 
 ## Unreleased
 
+## 1.2.4
+
+- Made stale remembered mappings visible, replaceable, and safely removable
+  within the selected account.
+- Added a return-to-mapping recovery path after a host-level bulk-write
+  rejection, without automatic partial retries.
+
 ## 1.2.3
 
 - Added bulk confirmation for unambiguous security mappings, represents
