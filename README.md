@@ -39,13 +39,15 @@ See the complete [installation guide](docs/INSTALL.md).
 
 1. Export an **Account statement** CSV from DEGIRO.
 2. Select the file and the Wealthfolio account that should receive the data.
-3. Review every detected instrument and confirm ticker/exchange mappings.
+3. Review every detected instrument and confirm ticker/exchange mappings. You may accept all
+   single-result matches; ambiguous or missing results still require review.
 4. Inspect validation messages and the reconciliation summary.
 5. Import only after the review is complete.
 
 Saved mappings are scoped to the selected Wealthfolio account. Repeating the
 same import, or importing overlapping date ranges, is protected by stable row
-fingerprints and import checks.
+fingerprints and import checks. If Wealthfolio rejects a draft, the importer
+shows safe row-level diagnostics without exposing statement data.
 
 ## What is supported
 
@@ -53,7 +55,8 @@ The importer understands the DEGIRO account-statement schema in Dutch and
 English header variants, including localized numeric values. Supported
 activity families include:
 
-- buys and sells, including grouped order fees and accrued-interest rows;
+- buys and sells, including grouped order fees and accrued-interest rows (recorded as separate
+  cash settlements so bond purchase cost basis is unchanged);
 - dividends, taxes, fees, deposits, withdrawals, and account interest;
 - foreign-exchange rows used by the statement format.
 

@@ -56,8 +56,24 @@ export function ImportResult({ result, onReset }: ImportResultProps): ReactEleme
         <div className="flex items-center gap-2">
           <Badge variant="warning">{result.failed} failed</Badge>
           <span className="text-sm text-muted-foreground">
-            Some activities were not created. See the host for details.
+            Some activities were not created. Review the safe diagnostics below.
           </span>
+        </div>
+      ) : null}
+
+      {result.failures.length > 0 ? (
+        <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3">
+          <p className="text-sm font-medium text-destructive">Import diagnostics</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {result.failures.map((failure, index) => (
+              <li key={`${failure.sourceRowNumbers?.join('-') ?? 'batch'}-${index}`}>
+                {failure.sourceRowNumbers?.length
+                  ? `Rows ${failure.sourceRowNumbers.join(', ')}: `
+                  : ''}
+                {failure.message}
+              </li>
+            ))}
+          </ul>
         </div>
       ) : null}
 

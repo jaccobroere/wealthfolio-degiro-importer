@@ -47,9 +47,9 @@ describe('parseAndMap — localized-quantities fixture (the bug fix)', () => {
     expect(qtys).toEqual(['1234', '1750', '2506', '6408']);
   });
 
-  it('preserves accrued interest on all four BUY drafts', () => {
+  it('represents accrued interest as four separate cash settlements', () => {
     const withAccrued = batch.activities.filter(
-      (a) => a.activityType === 'BUY' && a.accruedInterest,
+      (a) => a.activityType === 'FEE' && a.accruedInterest,
     );
     expect(withAccrued).toHaveLength(4);
   });

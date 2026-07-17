@@ -4,8 +4,9 @@
  * Reuses confirmed instrument mappings through `getImportMapping` /
  * `saveImportMapping`. A saved mapping is auto-applied ONLY after verifying
  * the same canonical identity (symbol + MIC + provider). New or ambiguous
- * `searchTicker` results block for review; the first search result is NEVER
- * auto-selected.
+ * `searchTicker` results block for review; a user-requested bulk action may
+ * accept a single unambiguous result, but the first of multiple results is
+ * NEVER auto-selected.
  */
 import type {
   AssetResolutionInput,
@@ -57,6 +58,10 @@ export function readSavedMappings(mapping: ImportMappingData): Map<string, Canon
           symbol: parsed.symbol,
           exchangeMic: parsed.exchangeMic,
           providerId: parsed.providerId,
+          quoteCcy: parsed.quoteCcy,
+          instrumentType: parsed.instrumentType,
+          providerSymbol: parsed.providerSymbol,
+          kind: parsed.kind,
         });
       }
     } catch {

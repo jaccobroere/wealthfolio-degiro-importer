@@ -27,7 +27,7 @@ describe('reconcile', () => {
     const rec = reconcile(batch);
     expect(rec.accruedInterestActivityCount).toBe(4);
     expect(rec.accruedInterestSourceRowCount).toBe(4);
-    expect(rec.buyDraftsWithAccruedInterestCount).toBe(4);
+    expect(rec.accruedInterestSettlementCount).toBe(4);
   });
 
   it('reports known internal cash movements and skip reasons', () => {

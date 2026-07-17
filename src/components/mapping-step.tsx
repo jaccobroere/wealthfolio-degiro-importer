@@ -2,8 +2,9 @@
  * Mapping step.
  *
  * Selects the destination account and confirms every unseen security via
- * `ctx.api['market-data'].searchTicker(query)`. NEVER auto-accepts the first
- * result. Reuses exact saved mappings via
+ * `ctx.api['market-data'].searchTicker(query)`. It can accept an explicitly
+ * requested batch of single-result searches, but NEVER selects the first of
+ * multiple results. Reuses exact saved mappings via
  * `ctx.api.activities.getImportMapping(accountId, contextKind)` only after
  * verifying canonical identity (symbol+MIC+provider) matches. Unresolved or
  * ambiguous symbols block progression to review.
@@ -30,6 +31,8 @@ export interface MappingStepProps {
   onSearchSymbol: (sourceTickerOrIsin: string) => void;
   /** Called when the user manually confirms a search result by index. */
   onConfirmSymbol: (sourceTickerOrIsin: string, resultIndex: number) => void;
+  /** Accept all unresolved symbols with exactly one fresh search result. */
+  onAcceptAllSuggested: () => Promise<void>;
   /** Whether a search is in progress for a symbol. */
   searchingFor: string | null;
   /** Last search results for a symbol (for manual confirmation). */
@@ -39,6 +42,8 @@ export interface MappingStepProps {
   } | null;
   /** Whether saved mappings are being loaded. */
   loadingMappings: boolean;
+  /** Whether the one-result bulk acceptance is in progress. */
+  acceptingSuggestedMappings: boolean;
   /** Continue to review (only enabled when all symbols resolved). */
   onContinue: () => void;
   /** Go back to upload. */
@@ -55,9 +60,11 @@ export function MappingStep(props: MappingStepProps): ReactElement {
     symbolResolutions,
     onSearchSymbol,
     onConfirmSymbol,
+    onAcceptAllSuggested,
     searchingFor,
     searchResults,
     loadingMappings,
+    acceptingSuggestedMappings,
     onContinue,
     onBack,
   } = props;
@@ -93,6 +100,24 @@ export function MappingStep(props: MappingStepProps): ReactElement {
           <h3 className="text-sm font-medium">
             Securities to confirm ({instrumentSymbols.length})
           </h3>
+          {unresolvedCount > 0 ? (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={loadingMappings || acceptingSuggestedMappings}
+                onClick={() => void onAcceptAllSuggested()}
+                data-testid="accept-all-suggested"
+              >
+                {acceptingSuggestedMappings ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                Accept all unambiguous matches
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Accepts only searches with exactly one result. Multiple or missing results still
+                need your review.
+              </p>
+            </div>
+          ) : null}
           <div className="space-y-2">
             {instrumentSymbols.map((sym) => (
               <SymbolRow
@@ -101,7 +126,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
                 resolution={symbolResolutions[sym] ?? { status: 'pending' }}
                 onSearch={() => onSearchSymbol(sym)}
                 onConfirm={(idx) => onConfirmSymbol(sym, idx)}
-                searching={searchingFor === sym}
+                searching={searchingFor === sym || acceptingSuggestedMappings}
                 searchResults={searchResults?.symbol === sym ? searchResults.results : null}
               />
             ))}
@@ -126,7 +151,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
             </Badge>
           ) : null}
           <Button
-            disabled={!accountId || !allResolved}
+            disabled={!accountId || !allResolved || loadingMappings}
             onClick={onContinue}
             data-testid="mapping-continue"
           >

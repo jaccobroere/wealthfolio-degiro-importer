@@ -26,7 +26,7 @@ export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE };
  * Map a pure-core `ActivityType` (DEGIRO subset) to the SDK `ActivityType`.
  *
  * The DEGIRO pure core emits BUY, SELL, DIVIDEND, TAX, DEPOSIT, WITHDRAWAL,
- * INTEREST, FEE — all valid SDK activity types — so this is a 1:1 cast.
+ * INTEREST, FEE, CREDIT — all valid SDK activity types — so this is a 1:1 cast.
  */
 export function toSdkActivityType(type: ActivityDraft['activityType']): ActivityType {
   return type as ActivityType;
@@ -78,7 +78,9 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
     // The v3.6.1 server's ActivityImport wire model requires a string even
     // for cash-only activities. An empty symbol is its documented cash form;
     // omitting it produces a 422 before the read-only checkImport gate runs.
-    symbol: isInstrumentSymbol(draft.symbol) ? draft.symbol : '',
+    // Supply the reviewed canonical symbol to checkImport. The source symbol
+    // may be a broker label or ISIN and is retained only in provenance.
+    symbol: isInstrumentSymbol(draft.symbol) ? (asset?.symbol ?? draft.symbol) : '',
     quantity: draft.quantity || undefined,
     unitPrice: draft.unitPrice || undefined,
     amount: draft.amount || undefined,
@@ -100,30 +102,56 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
 }
 
 /**
- * Convert an accepted (checkImport-passed) `ActivityImport` row to an
- * `ActivityCreate` for `saveMany({ creates })`.
+ * Convert an accepted `checkImport` row to an `ActivityCreate` for
+ * `saveMany({ creates })`.
  *
- * Decimal strings are preserved. `asset` is set explicitly when a confirmed
- * mapping exists; cash activities omit `asset`. Metadata carries the
- * non-sensitive provenance fingerprint used for duplicate detection.
+ * `checkImport` resolves the quote currency, instrument type, quote mode,
+ * and existing asset id needed by Wealthfolio 3.6.1's persistence-only
+ * `saveMany` path. The checked row must therefore be retained instead of
+ * rebuilding activity data from the original CSV draft.
  */
-export function toActivityCreate(prepared: PreparedDraft, accountId: string): ActivityCreate {
+export function toActivityCreate(
+  prepared: PreparedDraft,
+  checked: ActivityImport,
+  accountId: string,
+  temporaryId: string,
+): ActivityCreate {
   const { draft, fingerprint, asset } = prepared;
-  const isInstrument = isInstrumentSymbol(draft.symbol);
-  const meta = buildMetadata(draft, fingerprint, asset);
+  const symbol = checked.symbol?.trim() ?? '';
+  const resolvedAsset: AssetResolutionInput | undefined = symbol
+    ? {
+        id: checked.assetId,
+        symbol,
+        exchangeMic: checked.exchangeMic,
+        name: checked.symbolName,
+        quoteMode:
+          checked.quoteMode === 'MANUAL' || checked.quoteMode === 'MARKET'
+            ? checked.quoteMode
+            : undefined,
+        quoteCcy: checked.quoteCcy,
+        instrumentType: checked.instrumentType,
+        providerId: checked.providerId,
+        providerSymbol: checked.providerSymbol,
+      }
+    : undefined;
+  const meta = buildMetadata(draft, fingerprint, resolvedAsset ?? asset);
   return {
+    // Correlates a host row-level error with this draft; never persists as the
+    // activity id because Wealthfolio maps it to a server-generated id.
+    id: temporaryId,
     accountId,
-    activityType: toSdkActivityType(draft.activityType),
-    activityDate: draft.date,
+    activityType: checked.activityType,
+    activityDate: checked.date ?? draft.date,
     sourceGroupId: draft.group?.orderId,
-    asset: isInstrument ? (asset ?? { symbol: draft.symbol }) : undefined,
-    quantity: draft.quantity || undefined,
-    unitPrice: draft.unitPrice || undefined,
-    amount: draft.amount || undefined,
-    currency: draft.currency,
-    fee: draft.fee || undefined,
-    comment: draft.comment,
-    fxRate: draft.group?.fxRate || undefined,
+    asset: resolvedAsset,
+    quantity: checked.quantity ?? undefined,
+    unitPrice: checked.unitPrice ?? undefined,
+    amount: checked.amount ?? undefined,
+    currency: checked.currency ?? draft.currency,
+    fee: checked.fee ?? undefined,
+    tax: checked.tax ?? undefined,
+    comment: checked.comment ?? undefined,
+    fxRate: checked.fxRate ?? draft.group?.fxRate ?? undefined,
     // The SDK permits an object for convenience, but the 3.6.1 host bulk
     // endpoint's wire DTO requires metadata to be a JSON string.
     metadata: JSON.stringify(meta),

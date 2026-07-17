@@ -472,7 +472,7 @@ test('keeps unresolved synthetic instruments out of host writes', async ({ page 
   expect(searchResponses).toContainEqual({ status: 200, resultCount: 0 });
 });
 
-test('explicitly selects a host-supported test instrument but keeps accrued-interest BUYs gated', async ({
+test('imports a host-supported instrument with accrued-interest cash settlements', async ({
   page,
 }) => {
   const searchResponses: { status: number; resultCount: number }[] = [];
@@ -503,7 +503,7 @@ test('explicitly selects a host-supported test instrument but keeps accrued-inte
   await frame.getByTestId('mapping-continue').click();
   await frame.getByTestId('review-continue').click();
   await frame.getByTestId('acknowledge-checkbox').click();
-  await expect(frame.getByTestId('import-button')).toBeDisabled();
+  await expect(frame.getByTestId('import-button')).toBeEnabled();
   await expect.poll(() => searchResponses.length).toBeGreaterThan(0);
   expect(searchResponses.some((entry) => entry.status === 200 && entry.resultCount > 0)).toBe(true);
 });

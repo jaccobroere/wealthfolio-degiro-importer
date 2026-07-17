@@ -25,20 +25,24 @@ describe('mapOrderGroup', () => {
     expect(a.group?.fillCount).toBe(2);
   });
 
-  it('merges broker fees and preserves accrued interest provenance', () => {
+  it('merges broker fees and emits accrued interest as a separate cash settlement', () => {
     const { rows } = parseDegiroCsv(
       readFileSync(join(FIXTURES, 'degiro-localized-quantities.csv'), 'utf-8'),
     );
     // Group rows by orderId manually for a single localized order.
     const groupRows = rows.filter((r) => r.orderId === 'ord-localized-0001');
     const result = mapOrderGroup(groupRows, 0);
-    expect(result.activities).toHaveLength(1);
-    const a = result.activities[0];
-    expect(a.quantity).toBe('1234'); // localized thousands separator
-    expect(a.accruedInterest, 'accrued interest must be preserved as provenance').toBeDefined();
-    expect(a.accruedInterest!.sourceRowNumbers).toHaveLength(1);
-    expect(a.accruedInterest!.totalAmount).toBe('-1.23');
-    expect(a.fee).toBe('2'); // merged transactiekosten
+    expect(result.activities).toHaveLength(2);
+    const buy = result.activities[0];
+    const accruedSettlement = result.activities[1];
+    expect(buy.quantity).toBe('1234'); // localized thousands separator
+    expect(buy.accruedInterest).toBeUndefined();
+    expect(buy.fee).toBe('2'); // merged transactiekosten only
+    expect(accruedSettlement.activityType).toBe('FEE');
+    expect(accruedSettlement.symbol).toBe('$CASH-EUR');
+    expect(accruedSettlement.amount).toBe('1.23');
+    expect(accruedSettlement.accruedInterest?.sourceRowNumbers).toHaveLength(1);
+    expect(accruedSettlement.accruedInterest?.totalAmount).toBe('-1.23');
     // The fee row should be a group-member with role 'fee'.
     expect(result.memberships.some((m) => m.role === 'fee')).toBe(true);
     expect(result.memberships.some((m) => m.role === 'accrued-interest')).toBe(true);

@@ -46,12 +46,12 @@ describe('DEGIRO reconciliation gate', () => {
     expect(screen.getByText('2 unresolved security symbol(s)')).toBeTruthy();
   });
 
-  it('keeps Import disabled when reconciliation residual rules fail', async () => {
+  it('allows Import when accrued interest is represented by cash settlements', async () => {
     const state = await buildState({ csv: ACCRUED_INTEREST_CSV, acknowledged: true });
     renderReconciliation(state);
 
-    expect((screen.getByTestId('import-button') as HTMLButtonElement).disabled).toBe(true);
-    expect(screen.getAllByText(/BUY draft\(s\) with accrued interest/i).length).toBeGreaterThan(0);
+    expect((screen.getByTestId('import-button') as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText('All residual rules pass')).toBeTruthy();
   });
 
   it('keeps Import disabled when acknowledgement is unchecked', async () => {
