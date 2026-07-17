@@ -71,6 +71,14 @@ export interface PreparedDraft {
   sourceTickerOrIsin?: string;
 }
 
+/** A safe, row-level validation or persistence failure. */
+export interface ImportFailure {
+  /** All source rows that contributed to the rejected activity draft. */
+  sourceRowNumbers?: readonly number[];
+  /** Sanitized user-facing message; never the raw host error. */
+  message: string;
+}
+
 /** Result of converting a draft to an `ActivityImport` row. */
 export interface ConvertedImport {
   /** The `ActivityImport` row to pass to `checkImport`. */
@@ -95,6 +103,8 @@ export interface ImportFlowResult {
   skippedDuplicates: number;
   /** Rows blocked from import (host validation errors or unresolved symbols). */
   blocked: number;
+  /** Sanitized validation/persistence errors correlated to source rows. */
+  failures: ImportFailure[];
   /** Fatal host error, when `checkImport` or `saveMany` threw. */
   fatal?: string;
 }

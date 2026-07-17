@@ -35,6 +35,8 @@ export interface FakeHostOptions {
   saveManyError?: Error;
   /** When set, `checkImport` throws this error instead of resolving. */
   checkImportError?: Error;
+  /** Optional host-like normalization applied by the read-only import check. */
+  checkImportTransform?: (activities: ActivityImport[]) => ActivityImport[];
   /** When set, `saveMany` returns this many `errors` entries (simulating a
    * partial failure for the first N creates). */
   saveManyErrorCount?: number;
@@ -51,6 +53,8 @@ export interface FakeHost {
   api: HostAPI;
   /** Recorded `saveMany` calls. */
   saveManyCalls: RecordedSaveMany[];
+  /** Read-only checkImport payloads, in call order. */
+  checkImportCalls: ActivityImport[][];
   /** Activities currently stored (after `saveMany` applies creates). */
   storedActivities: ActivityDetails[];
   /** The last mapping passed to `saveImportMapping`. */
@@ -105,6 +109,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   ];
   const storedActivities: ActivityDetails[] = [...(options.activities ?? [])];
   const saveManyCalls: RecordedSaveMany[] = [];
+  const checkImportCalls: ActivityImport[][] = [];
   let savedMapping: ImportMappingData | undefined;
   let idCounter = 1000;
 
@@ -130,7 +135,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       for (let i = 0; i < creates.length; i++) {
         const c = creates[i];
         if (i < errorCount) {
-          errors.push({ id: `temp-${i}`, action: 'create', message: 'simulated failure' });
+          errors.push({ id: c.id, action: 'create', message: 'simulated failure' });
           continue;
         }
         const id = `act-${idCounter++}`;
@@ -162,9 +167,11 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       throw new Error('not used');
     },
     checkImport: async (activities: ActivityImport[]): Promise<ActivityImport[]> => {
+      checkImportCalls.push(activities);
       if (options.checkImportError) throw options.checkImportError;
       // Pass-through: mark all as valid (the adapter re-checks isValid).
-      return activities.map((a) => ({ ...a, isValid: a.isValid ?? true }));
+      const checked = activities.map((a) => ({ ...a, isValid: a.isValid ?? true }));
+      return options.checkImportTransform?.(checked) ?? checked;
     },
     getImportMapping: async (
       _accountId: string,
@@ -228,6 +235,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   return {
     api,
     saveManyCalls,
+    checkImportCalls,
     storedActivities,
     get savedMapping() {
       return savedMapping;

@@ -139,7 +139,9 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.created).toBe(0);
     expect(result.importedFingerprints).toHaveLength(0);
     expect(result.failedFingerprints).toHaveLength(2);
-    expect(result.fatal).toBe('host down');
+    expect(result.fatal).toBe(
+      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+    );
     // Nothing stored.
     expect(host.storedActivities).toHaveLength(0);
   });
@@ -156,8 +158,58 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.importedFingerprints).toHaveLength(1);
     expect(result.failedFingerprints).toHaveLength(1);
     expect(result.fatal).toBeUndefined();
+    expect(result.failures).toEqual([
+      {
+        sourceRowNumbers: [42],
+        message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
+      },
+    ]);
     // Only the successful activity is stored.
     expect(host.storedActivities).toHaveLength(1);
+  });
+
+  it('saves the complete asset resolution returned by checkImport', async () => {
+    const host = createFakeHost({
+      checkImportTransform: (activities) =>
+        activities.map((activity) => ({
+          ...activity,
+          symbol: 'AAPL',
+          exchangeMic: 'XNAS',
+          quoteCcy: 'USD',
+          instrumentType: 'EQUITY',
+          quoteMode: 'MARKET',
+          providerId: 'yahoo',
+          providerSymbol: 'AAPL',
+        })),
+    });
+
+    const result = await runImport(host.api, 'acct-1', [buyDraft()]);
+
+    expect(result.created).toBe(1);
+    expect(host.saveManyCalls[0]?.request.creates?.[0]).toMatchObject({
+      asset: {
+        symbol: 'AAPL',
+        exchangeMic: 'XNAS',
+        quoteCcy: 'USD',
+        instrumentType: 'EQUITY',
+        quoteMode: 'MARKET',
+        providerId: 'yahoo',
+        providerSymbol: 'AAPL',
+      },
+    });
+  });
+
+  it('uses the reviewed canonical symbol in the checkImport request', async () => {
+    const host = createFakeHost();
+
+    await runImport(host.api, 'acct-1', [buyDraft()], async () => ({
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+    }));
+
+    expect(host.checkImportCalls[0]?.[0]?.symbol).toBe('AAPL');
   });
 
   it('fatal checkImport error returns to review and keeps Import disabled', async () => {
@@ -168,7 +220,9 @@ describe('DEGIRO adapter: idempotent import flow', () => {
 
     expect(result.attempted).toBe(0);
     expect(result.created).toBe(0);
-    expect(result.fatal).toBe('host validation fatal');
+    expect(result.fatal).toBe(
+      'Wealthfolio rejected this activity. Review the destination account and mapping.',
+    );
     expect(host.saveManyCalls).toHaveLength(0);
   });
 

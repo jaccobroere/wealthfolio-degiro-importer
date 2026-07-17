@@ -151,7 +151,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
             </Badge>
           ) : null}
           <Button
-            disabled={!accountId || !allResolved}
+            disabled={!accountId || !allResolved || loadingMappings}
             onClick={onContinue}
             data-testid="mapping-continue"
           >

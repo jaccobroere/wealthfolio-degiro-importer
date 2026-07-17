@@ -108,6 +108,7 @@ export interface ImportResultSummary {
   skippedDuplicates: number;
   blocked: number;
   failed: number;
+  failures: readonly { sourceRowNumbers?: readonly number[]; message: string }[];
   fatal?: string;
 }
 
@@ -574,7 +575,13 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
     case 'ACCOUNTS_LOADED':
       return { ...state, accounts: action.accounts };
     case 'SELECT_ACCOUNT':
-      return { ...state, accountId: action.accountId, acknowledged: false };
+      return {
+        ...state,
+        accountId: action.accountId,
+        symbolResolutions: {},
+        importedFingerprints: new Set(),
+        acknowledged: false,
+      };
     case 'DUPLICATE_INDEX_LOADED':
       return { ...state, importedFingerprints: action.fingerprints };
     case 'SYMBOL_RESOLUTIONS':

@@ -58,6 +58,10 @@ export function readSavedMappings(mapping: ImportMappingData): Map<string, Canon
           symbol: parsed.symbol,
           exchangeMic: parsed.exchangeMic,
           providerId: parsed.providerId,
+          quoteCcy: parsed.quoteCcy,
+          instrumentType: parsed.instrumentType,
+          providerSymbol: parsed.providerSymbol,
+          kind: parsed.kind,
         });
       }
     } catch {
