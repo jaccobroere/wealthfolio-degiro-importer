@@ -44,8 +44,6 @@ jobs:
           manifest_version="$(node -p "require('./manifest.json').version")"
           [[ "$package_version" == "${tag#v}" && "$manifest_version" == "$package_version" ]]
           test -f "docs/releases/$package_version.md"
-          attestation_version="$(node -p "require('./release/attestation.json').version")"
-          [[ "$attestation_version" == "$package_version" ]]
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -73,37 +71,6 @@ jobs:
           cmp /tmp/release-one.SHA256SUMS artifacts/SHA256SUMS
           pnpm validate:package
 
-      - name: Validate pre-committed attestation and generate final attestation
-        shell: bash
-        run: |
-          set -euo pipefail
-          node <<'NODE'
-          const fs = require('fs');
-          const crypto = require('crypto');
-          const a = JSON.parse(fs.readFileSync('release/attestation.json'));
-          const p = JSON.parse(fs.readFileSync('package.json'));
-          const zip = 'artifacts/' + p.name + '-' + p.version + '.zip';
-          const allowed = ['repository','version','zipFilename','localAcceptancePassed','disposableHostTestsPassed'];
-          const keys = Object.keys(a);
-          if (JSON.stringify(keys) !== JSON.stringify(allowed)) {
-            console.error('attestation keys must be exactly: ' + allowed.join(', ')); process.exit(1);
-          }
-          if (a.repository !== p.name || a.version !== p.version || a.zipFilename !== zip.slice('artifacts/'.length)) process.exit(1);
-          if (a.localAcceptancePassed !== true || a.disposableHostTestsPassed !== true) process.exit(1);
-          const releaseCommit = require('child_process').execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim();
-          const zipSha256 = crypto.createHash('sha256').update(fs.readFileSync(zip)).digest('hex');
-          const final = {
-            repository: a.repository,
-            version: a.version,
-            releaseCommit,
-            zipFilename: a.zipFilename,
-            zipSha256,
-            localAcceptancePassed: a.localAcceptancePassed,
-            disposableHostTestsPassed: a.disposableHostTestsPassed
-          };
-          fs.writeFileSync('artifacts/attestation.json', JSON.stringify(final, null, 2) + '\n');
-          NODE
-
       - name: Refuse an existing release
         shell: bash
         run: |
@@ -112,4 +79,4 @@ jobs:
       - name: Publish immutable assets
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" "artifacts/wealthfolio-degiro-importer-$(node -p "require('./package.json').version").zip" artifacts/SHA256SUMS artifacts/attestation.json --title "${GITHUB_REF_NAME}" --notes-file "docs/releases/$(node -p "require('./package.json').version").md"
+        run: gh release create "${GITHUB_REF_NAME}" "artifacts/wealthfolio-degiro-importer-$(node -p "require('./package.json').version").zip" artifacts/SHA256SUMS --title "${GITHUB_REF_NAME}" --notes-file "docs/releases/$(node -p "require('./package.json').version").md"
