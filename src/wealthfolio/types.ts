@@ -91,9 +91,9 @@ export interface ConvertedImport {
 
 /** Result of the import flow. */
 export interface ImportFlowResult {
-  /** Number of rows sent to `saveMany` as creates. */
+  /** Number of reviewed rows submitted to Wealthfolio's import API. */
   attempted: number;
-  /** Number of rows reported created by `saveMany` (authoritative). */
+  /** Number of rows reported imported by Wealthfolio (authoritative). */
   created: number;
   /** Fingerprints that were marked imported (only those in `created`). */
   importedFingerprints: string[];
@@ -105,6 +105,6 @@ export interface ImportFlowResult {
   blocked: number;
   /** Sanitized validation/persistence errors correlated to source rows. */
   failures: ImportFailure[];
-  /** Fatal host error, when `checkImport` or `saveMany` threw. */
+  /** Fatal host error, when `checkImport` or `import` threw. */
   fatal?: string;
 }

@@ -13,6 +13,7 @@ import type {
   ActivityDetails,
   ActivityImport,
   HostAPI,
+  ImportActivitiesResult,
   ImportMappingData,
   SymbolSearchResult,
 } from '@wealthfolio/addon-sdk';
@@ -32,6 +33,21 @@ export function getActivities(api: HostAPI, accountId: string): Promise<Activity
  * before any write. Fatal host errors propagate as rejections. */
 export function checkImport(api: HostAPI, activities: ActivityImport[]): Promise<ActivityImport[]> {
   return api.activities.checkImport(activities);
+}
+
+/**
+ * Commit a reviewed import through Wealthfolio's import workflow.
+ *
+ * In 3.6.1 this is deliberately distinct from `saveMany`: it preserves the
+ * host's import-specific duplicate detection, import-run bookkeeping, and
+ * reviewed asset representation. Add-ons must submit the rows returned by
+ * `checkImport`, with `isDraft` cleared once the user confirms the import.
+ */
+export function importCheckedActivities(
+  api: HostAPI,
+  activities: ActivityImport[],
+): Promise<ImportActivitiesResult> {
+  return api.activities.import(activities);
 }
 
 /**

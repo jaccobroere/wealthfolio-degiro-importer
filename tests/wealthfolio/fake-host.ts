@@ -2,7 +2,7 @@
  * Fake/in-memory `HostAPI` for adapter unit tests.
  *
  * Implements only the surfaces the DEGIRO adapter calls:
- * `accounts.getAll`, `activities.{getAll,checkImport,saveMany,
+ * `accounts.getAll`, `activities.{getAll,checkImport,import,saveMany,
  * getImportMapping,saveImportMapping}`, and `market.searchTicker`.
  *
  * `saveMany` is recorded so tests can assert it was always called with
@@ -16,6 +16,7 @@ import type {
   ActivityDetails,
   ActivityImport,
   HostAPI,
+  ImportActivitiesResult,
   ImportMappingData,
   SymbolSearchResult,
 } from '@wealthfolio/addon-sdk';
@@ -33,6 +34,10 @@ export interface FakeHostOptions {
   importMapping?: ImportMappingData;
   /** When set, `saveMany` throws this error instead of resolving. */
   saveManyError?: Error;
+  /** When set, the supported import endpoint rejects before returning a result. */
+  importError?: Error;
+  /** Simulate import-time validation failures for the first N reviewed rows. */
+  importValidationErrorCount?: number;
   /** When set, `checkImport` throws this error instead of resolving. */
   checkImportError?: Error;
   /** Optional host-like normalization applied by the read-only import check. */
@@ -53,6 +58,8 @@ export interface FakeHost {
   api: HostAPI;
   /** Recorded `saveMany` calls. */
   saveManyCalls: RecordedSaveMany[];
+  /** Reviewed imports sent through `activities.import`. */
+  importCalls: ActivityImport[][];
   /** Read-only checkImport payloads, in call order. */
   checkImportCalls: ActivityImport[][];
   /** Activities currently stored (after `saveMany` applies creates). */
@@ -109,7 +116,9 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   ];
   const storedActivities: ActivityDetails[] = [...(options.activities ?? [])];
   const saveManyCalls: RecordedSaveMany[] = [];
+  const importCalls: ActivityImport[][] = [];
   const checkImportCalls: ActivityImport[][] = [];
+  const importedKeys = new Set<string>();
   let savedMapping: ImportMappingData | undefined;
   let idCounter = 1000;
 
@@ -163,8 +172,88 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       }
       return { created, updated: [], deleted: [], createdMappings: [], errors };
     },
-    import: async () => {
-      throw new Error('not used');
+    import: async (imports: ActivityImport[]): Promise<ImportActivitiesResult> => {
+      importCalls.push(imports);
+      if (options.importError) throw options.importError;
+      if ((options.importValidationErrorCount ?? 0) > 0) {
+        const activities = imports.map((activity, index) =>
+          index < (options.importValidationErrorCount ?? 0)
+            ? {
+                ...activity,
+                isValid: false,
+                errors: { general: ['simulated import validation failure'] },
+              }
+            : activity,
+        );
+        return {
+          activities,
+          importRunId: '',
+          summary: {
+            total: imports.length,
+            imported: 0,
+            skipped: 0,
+            duplicates: 0,
+            assetsCreated: 0,
+            success: false,
+          },
+        };
+      }
+      const activities = imports.map((activity) => {
+        const key = [
+          activity.accountId,
+          activity.activityType,
+          activity.date,
+          activity.symbol,
+          activity.quantity,
+          activity.unitPrice,
+          activity.amount,
+          activity.currency,
+        ].join('|');
+        if (importedKeys.has(key)) {
+          return {
+            ...activity,
+            warnings: { ...(activity.warnings ?? {}), _duplicate: ['simulated duplicate'] },
+            duplicateOfId: 'existing-activity',
+          };
+        }
+        importedKeys.add(key);
+        const id = `act-${idCounter++}`;
+        const now = new Date().toISOString();
+        const created: Activity = {
+          id,
+          accountId: activity.accountId,
+          activityType: activity.activityType,
+          status: activity.isDraft ? 'DRAFT' : 'POSTED',
+          activityDate:
+            typeof activity.date === 'string'
+              ? activity.date
+              : (activity.date?.toISOString() ?? now),
+          quantity: activity.quantity?.toString() ?? null,
+          unitPrice: activity.unitPrice?.toString() ?? null,
+          amount: activity.amount?.toString() ?? null,
+          fee: activity.fee?.toString() ?? null,
+          currency: activity.currency ?? 'EUR',
+          isUserModified: false,
+          needsReview: activity.isDraft,
+          createdAt: now,
+          updatedAt: now,
+        };
+        storedActivities.push(toDetails(created));
+        return activity;
+      });
+      const duplicates = activities.filter((activity) => activity.duplicateOfId).length;
+      return {
+        activities,
+        importRunId: 'run-1',
+        summary: {
+          total: imports.length,
+          imported: imports.length - duplicates,
+          skipped: duplicates,
+          duplicates,
+          assetsCreated: 0,
+          success: true,
+        },
+      };
     },
     checkImport: async (activities: ActivityImport[]): Promise<ActivityImport[]> => {
       checkImportCalls.push(activities);
@@ -235,6 +324,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   return {
     api,
     saveManyCalls,
+    importCalls,
     checkImportCalls,
     storedActivities,
     get savedMapping() {

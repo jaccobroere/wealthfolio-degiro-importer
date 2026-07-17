@@ -8,22 +8,20 @@
  *    host errors return to review and keep Import disabled.
  * 3. Build a duplicate index from `activities.getAll(accountId)`, filtering
  *    by this add-on's `importerId`.
- * 4. Partition accepted rows into new and exact-duplicate. Exact duplicates
- *    are skipped (zero `saveMany` creates).
- * 5. Convert only accepted, non-duplicate rows → `ActivityCreate[]`.
- * 6. Call `activities.saveMany({ creates })`. NEVER pass a bare array.
- * 7. Mark fingerprints imported ONLY for entries that appear in `created`
- *    (authoritative). Failed/partial writes never mark failed fingerprints.
+ * 4. Partition accepted rows into new and legacy exact-duplicates.
+ * 5. Submit the checked rows to `activities.import`, Wealthfolio's
+ *    import-specific persistence workflow.
+ * 6. Use the host import result for authoritative created/duplicate outcomes.
  */
-import type { ActivityCreate, ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
+import type { ActivityImport, HostAPI } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../domain/activity-draft';
 import { isInstrumentSymbol } from '../domain/activity-draft';
 import { fingerprintActivity } from '../duplicates/fingerprint';
 import { buildDuplicateIndex } from './duplicate-index';
-import { toActivityCreate, toActivityImport } from './convert-activity';
-import { getActivities, checkImport, saveCreates } from './api';
-import type { ImportFailure, ImportFlowResult, PreparedDraft } from './types';
+import { toActivityImport } from './convert-activity';
+import { getActivities, checkImport, importCheckedActivities } from './api';
+import type { ImportFlowResult, PreparedDraft } from './types';
 import { IMPORTER_ID } from './types';
 
 /**
@@ -97,8 +95,9 @@ export async function runImport(
   const existing = await getActivities(api, accountId);
   const index = buildDuplicateIndex(existing);
 
-  // 4. Partition into new and exact-duplicate. Only rows that passed
-  //    checkImport (isValid true) and are not exact duplicates proceed.
+  // 4. Partition into new and legacy exact-duplicate rows. Importer metadata
+  // from pre-1.2.5 releases is still honored here; newer rows are deduplicated
+  // by Wealthfolio's import workflow below.
   const accepted: Array<{ prepared: PreparedDraft; checked: ActivityImport }> = [];
   for (let i = 0; i < prepared.length; i++) {
     const p = prepared[i];
@@ -122,74 +121,77 @@ export async function runImport(
     return result;
   }
 
-  // 5. Preserve the host-normalized checked rows for the persistence-only
-  // saveMany contract.
-  const creates: ActivityCreate[] = accepted.map(({ prepared, checked }) =>
-    toActivityCreate(prepared, checked, accountId, `degiro-import:${prepared.fingerprint}`),
-  );
-  result.attempted = creates.length;
+  // 5. The reviewed representation returned by checkImport is the only safe
+  // input for the matching 3.6.1 import endpoint. A confirmed user action
+  // creates posted activities, rather than retaining review-only drafts.
+  const confirmed = accepted.map(({ checked }) => ({ ...checked, isDraft: false }));
+  result.attempted = confirmed.length;
 
-  // 6. Call saveMany({ creates }). NEVER a bare array.
-  let mutation;
+  let hostImport;
   try {
-    mutation = await saveCreates(api, creates);
+    hostImport = await importCheckedActivities(api, confirmed);
   } catch (err) {
-    // Fatal: no fingerprints are marked imported. Do not retry subsets here:
-    // the host can create assets/FX pairs while preparing a request, and an
-    // automatic retry would turn a single explicit import into an ambiguous
-    // partial-write workflow.
+    // The import endpoint is atomic. A rejection gives no safe indication
+    // whether the server committed anything, so do not retry automatically.
     result.fatal = safeHostFailureMessage(err, 'batch');
     result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
     return result;
   }
 
-  // 7. Mark imported ONLY the fingerprints that appear in `created`. The
-  //    `created` array is authoritative; entries in `errors` are not marked.
-  const createdIds = new Set(mutation.created.map((a) => a.id));
-  const createdFingerprints: string[] = [];
-
-  // Map created activities back to prepared drafts via metadata fingerprint.
-  // The host assigns ids; we correlate via the metadata we attached.
-  for (const activity of mutation.created) {
-    const meta = activity.metadata as Record<string, unknown> | undefined;
-    const fp = meta?.sourceFingerprint;
-    if (typeof fp === 'string' && fp.length > 0) createdFingerprints.push(fp);
+  // 6. `import` returns the reviewed rows in request order. This lets the
+  // add-on correlate host duplicate/validation status without inventing an
+  // activity-create payload or storing private statement provenance.
+  if (hostImport.activities.length !== accepted.length) {
+    result.fatal = 'Wealthfolio returned an incomplete import result. No automatic retry was made.';
+    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
+    return result;
   }
 
-  // If the host did not round-trip metadata, fall back to positional
-  // correlation: assume `created` is in the same order as `creates`. This is
-  // defensive only; the metadata round-trip is the verified protocol.
-  if (
-    createdFingerprints.length === 0 &&
-    createdIds.size > 0 &&
-    mutation.created.length === accepted.length
-  ) {
-    for (let i = 0; i < accepted.length; i++) {
-      createdFingerprints.push(accepted[i].prepared.fingerprint);
-    }
-  }
-
-  result.created = mutation.created.length;
-  result.importedFingerprints = createdFingerprints;
-
-  // Any attempted fingerprint not in `created` is a failure (partial write).
-  const createdSet = new Set(createdFingerprints);
-  for (const { prepared } of accepted) {
-    if (!createdSet.has(prepared.fingerprint)) result.failedFingerprints.push(prepared.fingerprint);
-  }
-
-  const rowsByTemporaryId = new Map<string, readonly number[]>();
+  const imported: string[] = [];
+  let hostDuplicates = 0;
   for (let i = 0; i < accepted.length; i++) {
-    rowsByTemporaryId.set(creates[i].id ?? '', accepted[i].prepared.draft.sourceRowNumbers);
+    const returned = hostImport.activities[i];
+    const preparedDraft = accepted[i].prepared;
+    const duplicate = isHostDuplicate(returned);
+    const invalid = !returned.isValid || hasErrors(returned);
+    if (duplicate) {
+      hostDuplicates += 1;
+      continue;
+    }
+    if (invalid) {
+      result.failures.push({
+        sourceRowNumbers: preparedDraft.draft.sourceRowNumbers,
+        message: safeHostFailureMessage(returned.errors),
+      });
+      result.failedFingerprints.push(preparedDraft.fingerprint);
+      continue;
+    }
+    imported.push(preparedDraft.fingerprint);
   }
-  result.failures.push(
-    ...mutation.errors.map((error): ImportFailure => ({
-      sourceRowNumbers: error.id ? rowsByTemporaryId.get(error.id) : undefined,
-      message: safeHostFailureMessage(error.message),
-    })),
-  );
+
+  result.created = hostImport.summary.imported;
+  result.skippedDuplicates += Math.max(hostDuplicates, hostImport.summary.duplicates);
+  if (!hostImport.summary.success || hostImport.summary.imported !== imported.length) {
+    result.fatal =
+      'Wealthfolio did not return a complete import outcome. No automatic retry was made.';
+    result.failedFingerprints = accepted.map(({ prepared }) => prepared.fingerprint);
+    return result;
+  }
+  result.importedFingerprints = imported;
 
   return result;
+}
+
+function hasErrors(activity: ActivityImport): boolean {
+  return Object.values(activity.errors ?? {}).some((messages) => messages.length > 0);
+}
+
+function isHostDuplicate(activity: ActivityImport): boolean {
+  return (
+    !!activity.duplicateOfId ||
+    activity.duplicateOfLineNumber !== undefined ||
+    Object.prototype.hasOwnProperty.call(activity.warnings ?? {}, '_duplicate')
+  );
 }
 
 // Re-export the importer id for callers (e.g. tests).
