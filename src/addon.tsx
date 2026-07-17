@@ -4,15 +4,14 @@
  * Targets the published `@wealthfolio/addon-sdk` 3.6.1, which supports only the
  * `render`-callback route model. (The host-managed `component` route model is
  * unreleased — it lands in 3.6.2 — so migration to it is future work, not
- * pending cleanup.) Sidebar navigation is manifest-declared
- * (`contributes.links.sidebar`); the runtime registers only the route
- * renderer, with an id (`main`) that exactly matches `contributes.routes[].id`
- * in the manifest (a mismatch renders a blank page).
+ * pending cleanup.) In the 3.6.1 host, sidebar navigation is registered at
+ * runtime along with the route; manifest-declared navigation was introduced
+ * after this host version.
  *
  * Contract (verified against `@wealthfolio/addon-sdk` 3.6.1, see
  * `docs/SDK-CONTRACT.md`):
- * - `ctx.router.add({ id, path, render })` with `render({ root, location })`.
- *   `id` must equal `manifest.json` `contributes.routes[].id`.
+ * - `ctx.sidebar.addItem(...)` and `ctx.router.add({ id, path, render })`
+ *   register the visible importer entry and its sandboxed route.
  * - Create ONE React root via `createRoot(root)` (from `react-dom/client`),
  *   reuse it across renders, unmount in `ctx.onDisable()`.
  * - `onRendered`: the 3.6.1 iframe host includes this acknowledgement
@@ -22,7 +21,6 @@
  *   defensively in both importers; it is undocumented, so keep it isolated
  *   and re-verify against the host if the SDK changes. See
  *   `docs/SDK-CONTRACT.md`.
- * - No `ctx.sidebar.addItem` — navigation comes from `contributes.links.sidebar`.
  * - No React-DOM global, no React-Router hooks (router context is unavailable
  *   in the sandbox); `location` is forwarded as a prop.
  */
@@ -32,16 +30,23 @@ import type { AddonContext, AddonRouteRenderContext } from '@wealthfolio/addon-s
 
 import { ImporterPage } from './pages/importer-page';
 
-/** Route id — MUST match `manifest.json` `contributes.routes[].id`. */
 const ROUTE_ID = 'main';
-/** Sandbox route path (plural, manifest-id-derived). */
-const ROUTE_PATH = '/addons/degiro-importer';
+/** Wealthfolio 3.6.1 add-on route namespace. */
+const ROUTE_PATH = '/addon/degiro-importer';
 
 export function enable(ctx: AddonContext): void {
   // Function-local per-enable state. Each `enable` starts fresh, so no
   // module-scoped mutable state, no double-enable guard, and no test-only
   // reset helper is needed.
   let root: Root | null = null;
+  let sidebarRemoved = false;
+  const sidebarItem = ctx.sidebar.addItem({
+    id: 'degiro-importer',
+    label: 'DEGIRO Import',
+    icon: 'files',
+    route: ROUTE_PATH,
+    order: 100,
+  });
 
   ctx.router.add({
     id: ROUTE_ID,
@@ -61,6 +66,10 @@ export function enable(ctx: AddonContext): void {
   });
 
   ctx.onDisable(() => {
+    if (!sidebarRemoved) {
+      sidebarItem.remove();
+      sidebarRemoved = true;
+    }
     // Unmount the React root exactly once.
     if (root !== null) {
       root.unmount();
