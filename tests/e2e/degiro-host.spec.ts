@@ -8,6 +8,8 @@ import {
   CANONICAL_SIGNS_FIXTURE,
   INVALID_FIXTURE,
   MAPPING_PERSISTENCE_FIXTURE,
+  PORTFOLIO_ACCOUNT_NAME,
+  PORTFOLIO_FIXTURE,
   completeOnboarding,
   createDisposableAccount,
   installExactAddon,
@@ -205,6 +207,114 @@ test('imports a synthetic cash-only statement and skips the same statement on re
     return (await response.json()) as { data?: unknown[] };
   }, activitiesSearch!);
   expect(afterOverlap.data).toHaveLength(3);
+});
+
+test('imports the masked instrument portfolio through search, check, persistence, and duplicate detection', async ({
+  page,
+}) => {
+  let checkedActivities: Array<Record<string, unknown>> | undefined;
+  let importedActivities: Array<Record<string, unknown>> | undefined;
+  page.on('response', (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (response.request().method() !== 'POST' || !pathname.startsWith('/api/v1/activities/')) {
+      return;
+    }
+    if (pathname === '/api/v1/activities/import/check') {
+      void response.json().then((body: unknown) => {
+        if (Array.isArray(body)) checkedActivities = body as Array<Record<string, unknown>>;
+      });
+    }
+    if (pathname === '/api/v1/activities/import') {
+      const body = JSON.parse(response.request().postData() ?? '{}') as {
+        activities?: Array<Record<string, unknown>>;
+      };
+      importedActivities = body.activities;
+    }
+  });
+
+  await signIn(page);
+  await createDisposableAccount(page, PORTFOLIO_ACCOUNT_NAME);
+  const frame = await openAddon(page);
+  await upload(frame, PORTFOLIO_FIXTURE);
+  await frame.getByTestId('account-select-trigger').click();
+  await frame.getByText(`${PORTFOLIO_ACCOUNT_NAME} (EUR)`).click();
+  await expect(frame.getByTestId('unresolved-count')).toHaveText('1 unresolved');
+  await frame.getByTestId('search-btn-IE00B945VV12').click();
+  await expect(frame.getByTestId('search-results-IE00B945VV12')).toBeVisible();
+  await frame.getByTestId('search-result-IE00B945VV12-0').click();
+  await expect(frame.getByTestId('mapping-continue')).toBeEnabled();
+  await frame.getByTestId('mapping-continue').click();
+  await frame.getByTestId('review-continue').click();
+  await frame.getByTestId('acknowledge-checkbox').click();
+  await frame.getByTestId('import-button').click();
+  await expect(frame.getByRole('heading', { name: 'Import complete' })).toBeVisible();
+  await expect.poll(() => checkedActivities).toBeDefined();
+  await expect.poll(() => importedActivities).toBeDefined();
+
+  const checkedInstrument = checkedActivities?.find((activity) => activity.symbol !== '');
+  expect(checkedInstrument).toEqual(
+    expect.objectContaining({
+      isValid: true,
+      quoteCcy: expect.any(String),
+      instrumentType: expect.any(String),
+    }),
+  );
+  const importedInstrument = importedActivities?.find((activity) => activity.symbol !== '');
+  expect(importedInstrument).toEqual(
+    expect.objectContaining({
+      isDraft: false,
+      exchangeMic: expect.any(String),
+      providerId: expect.any(String),
+    }),
+  );
+
+  const persisted = await page.evaluate(async (name) => {
+    const accounts = (await fetch('/api/v1/accounts').then((response) =>
+      response.json(),
+    )) as Array<{
+      id: string;
+      name: string;
+    }>;
+    const account = accounts.find((candidate) => candidate.name === name);
+    if (!account) throw new Error('Disposable portfolio account is missing');
+    const response = await fetch('/api/v1/activities/search', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        page: 0,
+        pageSize: Number.MAX_SAFE_INTEGER,
+        accountIdFilter: [account.id],
+        sort: { id: 'date', desc: true },
+      }),
+    });
+    const payload = (await response.json()) as {
+      data?: Array<{ activityType?: string; assetId?: string | null }>;
+    };
+    const activities = payload.data ?? [];
+    return {
+      status: response.status,
+      count: activities.length,
+      types: activities.map((activity) => activity.activityType).sort(),
+      assetBacked: activities.filter((activity) => Boolean(activity.assetId)).length,
+    };
+  }, PORTFOLIO_ACCOUNT_NAME);
+  expect(persisted.status).toBe(200);
+  expect(persisted.count).toBe(importedActivities?.length);
+  expect(persisted.types).toEqual(expect.arrayContaining(['BUY', 'SELL', 'DIVIDEND']));
+  expect(persisted.assetBacked).toBeGreaterThanOrEqual(3);
+
+  await frame.getByTestId('reset-button').click();
+  await upload(frame, PORTFOLIO_FIXTURE);
+  await frame.getByTestId('account-select-trigger').click();
+  await frame.getByText(`${PORTFOLIO_ACCOUNT_NAME} (EUR)`).click();
+  await expect(frame.getByTestId('mapping-continue')).toBeEnabled();
+  await frame.getByTestId('mapping-continue').click();
+  await frame.getByTestId('review-continue').click();
+  await frame.getByTestId('acknowledge-checkbox').click();
+  await frame.getByTestId('import-button').click();
+  await expect(frame.getByRole('heading', { name: 'Import complete' })).toBeVisible();
+  await expect(frame.getByText('0 activity(ies) created successfully.')).toBeVisible();
 });
 
 test('blocks a synthetic invalid statement before the import action is available', async ({

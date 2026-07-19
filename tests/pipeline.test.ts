@@ -92,3 +92,28 @@ describe('parseAndMap — overlap fixture (overlap detection, not silent merge)'
     expect(JSON.stringify(fps2)).toBe(JSON.stringify(fps1));
   });
 });
+
+describe('parseAndMap — masked E2E portfolio fixture', () => {
+  const { batch } = parseAndMap(readFileSync(join(FIXTURES, 'degiro-e2e-portfolio.csv'), 'utf-8'));
+
+  it('accounts for every broker-shaped source row', () => {
+    expect(batch.summary.sourceRowCount).toBe(12);
+    expect(batch.summary.unaccountedCount).toBe(0);
+    expect(batch.summary.unsupportedCount).toBe(0);
+    expect(batch.summary.invalidCount).toBe(0);
+  });
+
+  it('keeps the activity families exercised by the full host E2E', () => {
+    expect(batch.summary.byActivityType).toEqual(
+      expect.objectContaining({
+        BUY: 1,
+        SELL: 1,
+        DIVIDEND: 1,
+        TAX: 1,
+        DEPOSIT: 1,
+        WITHDRAWAL: 1,
+      }),
+    );
+    expect(batch.summary.skipReasons['cash-sweep']).toBe(1);
+  });
+});
