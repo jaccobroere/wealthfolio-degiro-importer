@@ -53,6 +53,12 @@ jobs:
       - name: Run synthetic verification and privacy/history gate
         run: pnpm verify
 
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run disposable-host E2E gate
+        run: pnpm test:e2e
+
       - name: Build twice and validate deterministic release
         shell: bash
         run: |

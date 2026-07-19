@@ -5,7 +5,15 @@ import path from 'node:path';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
 
 export const ROOT = path.resolve(import.meta.dirname, '../..');
-export const ADDON_ZIP = path.join(ROOT, 'artifacts/wealthfolio-degiro-importer-1.1.0.zip');
+const packageMetadata = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as {
+  name: string;
+  version: string;
+};
+export const ADDON_ZIP = path.join(
+  ROOT,
+  'artifacts',
+  `${packageMetadata.name}-${packageMetadata.version}.zip`,
+);
 export const CASH_FIXTURE = path.join(import.meta.dirname, 'fixtures/degiro-cash-only.csv');
 export const CASH_OVERLAP_FIXTURE = path.join(
   import.meta.dirname,
@@ -21,11 +29,13 @@ export const ACCRUED_INTEREST_FIXTURE = path.join(
   ROOT,
   'tests/fixtures/degiro-accrued-interest.csv',
 );
+export const PORTFOLIO_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-e2e-portfolio.csv');
 export const MAPPING_PERSISTENCE_FIXTURE = path.join(
   import.meta.dirname,
   'fixtures/degiro-mapping-persistence.csv',
 );
 export const ACCOUNT_NAME = 'Synthetic DEGIRO Test';
+export const PORTFOLIO_ACCOUNT_NAME = 'Synthetic DEGIRO Portfolio';
 
 export function addonFrame(page: Page): FrameLocator {
   return page.frameLocator('iframe');
@@ -34,7 +44,7 @@ export function addonFrame(page: Page): FrameLocator {
 export function assertExactArchive(): void {
   const expected = readFileSync(path.join(ROOT, 'artifacts/SHA256SUMS'), 'utf8')
     .split('\n')
-    .find((line) => line.endsWith('wealthfolio-degiro-importer-1.1.0.zip'))
+    .find((line) => line.endsWith(path.basename(ADDON_ZIP)))
     ?.trim()
     .split(/\s+/)[0];
   const actual = createHash('sha256').update(readFileSync(ADDON_ZIP)).digest('hex');
@@ -96,17 +106,20 @@ export async function installExactAddon(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'DEGIRO Import' })).toBeVisible();
 }
 
-export async function createDisposableAccount(page: Page): Promise<void> {
+export async function createDisposableAccount(
+  page: Page,
+  accountName = ACCOUNT_NAME,
+): Promise<void> {
   await page.goto('/settings/accounts');
   await page.getByRole('button', { name: 'Add account' }).click();
-  await page.getByRole('textbox', { name: 'Account Name' }).fill(ACCOUNT_NAME);
+  await page.getByRole('textbox', { name: 'Account Name' }).fill(accountName);
   await page.getByRole('radio', { name: /Transactions/ }).click();
   await page.getByRole('combobox', { name: 'Currency' }).click();
   await page.getByRole('option', { name: 'European Euro (EUR)' }).click();
   await page.getByRole('button', { name: 'Add Account' }).click();
   // The host renders desktop and compact account lists; the compact duplicate
   // is the visible one at the E2E viewport.
-  await expect(page.getByText(ACCOUNT_NAME).last()).toBeVisible();
+  await expect(page.getByText(accountName).last()).toBeVisible();
 }
 
 export async function openAddon(page: Page): Promise<FrameLocator> {

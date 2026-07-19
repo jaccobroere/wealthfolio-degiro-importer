@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-degiro-importer",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "type": "module",
   "description": "Wealthfolio addon for importing DEGIRO account statements",
   "engines": {
@@ -41,8 +41,8 @@
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
     "privacy:scan": "sh scripts/privacy-scan.sh",
-    "integration:up": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml up --detach --wait",
-    "integration:down": "docker compose --project-name wf-degiro-addon-test --env-file tests/integration/.env.example -f tests/integration/compose.yml down --volumes --remove-orphans",
+    "integration:up": "docker compose --project-name wf-degiro-addon-test -f tests/integration/compose.yml up --detach --wait",
+    "integration:down": "docker compose --project-name wf-degiro-addon-test -f tests/integration/compose.yml down --volumes --remove-orphans",
     "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
     "verify:release": "sh scripts/verify-release.sh"
   },

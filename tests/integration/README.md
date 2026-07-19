@@ -51,10 +51,11 @@ host-supported test instrument, but remains gated because the source-confirmed
 valuation-history response returned no entries for the installed-importer
 synthetic scenario.
 
-Before any browser proof, validate the exact release archive
-`artifacts/wealthfolio-degiro-importer-1.1.0.zip` against
-`artifacts/SHA256SUMS`. The harness never tests `dist/` or a
-loose add-on bundle.
+Before any browser proof, validate the archive named by the current
+`package.json` against `artifacts/SHA256SUMS`. The harness never tests `dist/`
+or a loose add-on bundle. CI performs that package proof, installs the archive
+in a fresh host, and uploads the committed masked CSV fixtures through the
+actual add-on UI.
 
 For the optional local personal-statement parse-only gate, set
 `DEGIRO_ACCEPTANCE_CSV` to an absolute path. The test uploads that file through
