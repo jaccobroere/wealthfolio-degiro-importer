@@ -2,23 +2,22 @@
 
 ## Requirements
 
-- Node.js 20.19.0
+- Node.js 22
 - pnpm 10.34.5
-- Wealthfolio 3.6.1 for disposable host tests
 
-## Common commands
+## Everyday work
 
 ```sh
 pnpm install
-pnpm test
-pnpm build
-pnpm verify
+pnpm check
 ```
 
-`pnpm verify` is the public, synthetic gate. It formats with `prettier
---check`, runs lint/type checks and tests, builds the addon, scans privacy
-boundaries, validates the manifest, packages the ZIP, and validates the
-archive.
+`pnpm check` is the only CI gate. It checks formatting, linting, types, all
+synthetic Vitest tests, synthetic fixture privacy, the production build, and
+the addon manifest. It does not start Docker, a browser, or package a release.
+
+Use `pnpm package` when you need the release ZIP locally. It builds the addon,
+creates the ZIP, and validates its contents and checksum.
 
 ## Fixtures
 
@@ -28,7 +27,7 @@ real statement into the repository, even after redaction.
 
 ## Private acceptance
 
-The real-statement gate is local only:
+The real-statement parser check is local only:
 
 ```sh
 DEGIRO_ACCEPTANCE_CSV=/absolute/path/to/statement.csv \
@@ -36,18 +35,13 @@ DEGIRO_ACCEPTANCE_BASELINE=/absolute/path/to/baseline.json \
 pnpm acceptance:local
 ```
 
-Both files must exist. Their paths, contents, hashes, and exact results must
-not be logged, committed, attached to CI, or included in release evidence.
+Both files must exist. Their paths and contents must not be committed or sent
+to CI. This test exercises the parser directly; it does not start a host or
+write imported activities.
 
-## Host verification
+## Host smoke test
 
-The disposable Wealthfolio harness and its cleanup instructions are documented
-in `tests/integration/README.md`. It must use only the pinned Wealthfolio image,
-synthetic fixtures, loopback networking, and disposable storage.
-
-## Pull requests
-
-Keep parser behavior independent from React and the SDK where possible. Add a
-synthetic fixture and focused test for every supported schema edge case. Update
-the relevant user-facing format or limitation documentation when behavior
-changes.
+`pnpm test:host` packages the current addon, starts an isolated pinned
+Wealthfolio host, imports one synthetic cash CSV, and verifies the duplicate
+import creates no activities. Run it before a release and after a host SDK
+upgrade, not for every change.

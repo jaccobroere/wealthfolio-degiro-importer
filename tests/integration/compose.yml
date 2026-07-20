@@ -9,7 +9,7 @@ services:
       # Synthetic password is synthetic-test-password; its Argon2id PHC hash is
       # intentionally test-only and enables the host's add-on manager.
       WF_AUTH_REQUIRED: 'true'
-      WF_AUTH_PASSWORD_HASH: '$$argon2id$$v=19$$m=4096,t=3,p=1$$d2ZkZWdpcm90ZXN0c2FsdCE$$iU9k23FNcdwwokZ/JVoLI6Wkjzw3/YSRDDIzugs42Cs'
+      WF_AUTH_PASSWORD_HASH: '$$argon2id$$v=19$$m=4096,t=3,p=1$$d2ZkZWdpcm90ZXN0c2FsdCE$$zhhdj/y6AEO8sDVoANGOvkdgJ0vsJZDjATMH7k/Ozsw'
       WF_CORS_ALLOW_ORIGINS: 'http://127.0.0.1:18088'
     ports:
       - '127.0.0.1:${WF_DEGIRO_TEST_PORT:-18088}:8088'

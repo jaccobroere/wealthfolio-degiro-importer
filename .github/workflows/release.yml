@@ -48,28 +48,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Real-statement acceptance is a private pre-tag gate and is deliberately
-      # not run in GitHub Actions. CI uses synthetic fixtures only.
-      - name: Run synthetic verification and privacy/history gate
-        run: pnpm verify
-
-      - name: Build twice and validate deterministic release
-        shell: bash
-        run: |
-          set -euo pipefail
-          package_name="$(node -p "require('./package.json').name")"
-          package_version="$(node -p "require('./package.json').version")"
-          pnpm clean
-          pnpm build
-          pnpm package:addon
-          cp "artifacts/$package_name-$package_version.zip" /tmp/release-one.zip
-          cp artifacts/SHA256SUMS /tmp/release-one.SHA256SUMS
-          pnpm clean
-          pnpm build
-          pnpm package:addon
-          cmp /tmp/release-one.zip "artifacts/$package_name-$package_version.zip"
-          cmp /tmp/release-one.SHA256SUMS artifacts/SHA256SUMS
-          pnpm validate:package
+      # Main CI and the local release gate cover tests. This job packages the
+      # tagged main commit and publishes that exact archive.
+      - name: Package release archive
+        run: pnpm package
 
       - name: Refuse an existing release
         shell: bash

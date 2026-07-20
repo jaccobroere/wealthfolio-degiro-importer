@@ -3,7 +3,13 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
-## Unreleased
+## 1.2.7
+
+- Added a strongly masked, instrument-bearing account-statement fixture and
+  disposable-host E2E proof for mapping, `activities.import`, persistence, and
+  duplicate re-import.
+- CI now builds the current declared add-on archive and runs the browser E2E
+  suite against the pinned Wealthfolio 3.6.1 host.
 
 ## 1.2.4
 

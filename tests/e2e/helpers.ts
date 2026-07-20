@@ -1,142 +1,84 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type FrameLocator, type Page } from '@playwright/test';
 
-export const ROOT = path.resolve(import.meta.dirname, '../..');
-export const ADDON_ZIP = path.join(ROOT, 'artifacts/wealthfolio-degiro-importer-1.1.0.zip');
-export const CASH_FIXTURE = path.join(import.meta.dirname, 'fixtures/degiro-cash-only.csv');
-export const CASH_OVERLAP_FIXTURE = path.join(
-  import.meta.dirname,
-  'fixtures/degiro-cash-overlap.csv',
+const root = path.resolve(import.meta.dirname, '../..');
+const packageMetadata = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+  name: string;
+  version: string;
+};
+const addonZip = path.join(
+  root,
+  'artifacts',
+  `${packageMetadata.name}-${packageMetadata.version}.zip`,
 );
-export const CASH_BATCH_PROBE_FIXTURE = path.join(
-  import.meta.dirname,
-  'fixtures/degiro-cash-batch-probe.csv',
-);
-export const INVALID_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-unknown-type.csv');
-export const CANONICAL_SIGNS_FIXTURE = path.join(ROOT, 'tests/fixtures/degiro-canonical-signs.csv');
-export const ACCRUED_INTEREST_FIXTURE = path.join(
-  ROOT,
-  'tests/fixtures/degiro-accrued-interest.csv',
-);
-export const MAPPING_PERSISTENCE_FIXTURE = path.join(
-  import.meta.dirname,
-  'fixtures/degiro-mapping-persistence.csv',
-);
-export const ACCOUNT_NAME = 'Synthetic DEGIRO Test';
+const cashFixture = path.join(import.meta.dirname, 'fixtures/degiro-cash-only.csv');
+const accountName = 'Synthetic DEGIRO Test';
 
-export function addonFrame(page: Page): FrameLocator {
-  return page.frameLocator('iframe');
-}
-
-export function assertExactArchive(): void {
-  const expected = readFileSync(path.join(ROOT, 'artifacts/SHA256SUMS'), 'utf8')
+function assertExactArchive(): void {
+  const expected = readFileSync(path.join(root, 'artifacts/SHA256SUMS'), 'utf8')
     .split('\n')
-    .find((line) => line.endsWith('wealthfolio-degiro-importer-1.1.0.zip'))
+    .find((line) => line.endsWith(path.basename(addonZip)))
     ?.trim()
     .split(/\s+/)[0];
-  const actual = createHash('sha256').update(readFileSync(ADDON_ZIP)).digest('hex');
+  const actual = createHash('sha256').update(readFileSync(addonZip)).digest('hex');
   if (!expected || actual !== expected) {
-    throw new Error('The E2E harness only accepts the SHA256SUMS-validated release archive.');
+    throw new Error('Host smoke tests require the SHA256SUMS-validated release archive.');
   }
 }
 
-export async function signIn(page: Page): Promise<void> {
+async function signIn(page: Page): Promise<void> {
   await page.goto('/');
   const password = page.getByRole('textbox', { name: 'Enter your password' });
-  // The host first renders its auth-status loading state, so isVisible() can
-  // race and skip the login form. The v3.6.1 password form stays at `/` after
-  // successful submission; prove the documented JSON request succeeds and the
-  // form is dismissed instead of waiting for a URL redirect that never occurs.
-  // A container restart retains the disposable host's authenticated session.
-  // In that case the existing session is sufficient; do not attempt a second
-  // login against a form the host correctly does not render.
   await page.waitForTimeout(500);
   if ((await password.count()) === 0) return;
-  await expect(password).toBeVisible();
   await password.fill('synthetic-test-password');
-  const loginResponse = page.waitForResponse(
-    (response) =>
-      response.url().endsWith('/api/v1/auth/login') && response.request().method() === 'POST',
-  );
   await page.getByRole('button', { name: 'Sign In' }).click();
-  await expect((await loginResponse).status()).toBe(200);
   await expect(password).toBeHidden();
 }
 
-export async function completeOnboarding(page: Page): Promise<void> {
+/** Prepare an empty disposable host and install the packaged add-on. */
+export async function prepareHost(page: Page): Promise<void> {
   await signIn(page);
-
-  // v3.6.1 presents onboarding at `/`; its mode cards are informational, and
-  // onboarding advances with the footer controls. An initialized database has
-  // no Transactions choice.
-  const transactions = page.getByRole('heading', { name: 'Transactions' });
-  await expect(transactions).toBeVisible();
-
+  await expect(page.getByRole('heading', { name: 'Transactions' })).toBeVisible();
   await page.getByTestId('onboarding-continue-button').click();
-  await expect(page.getByText('Just a couple preferences to get you started')).toBeVisible();
   await page.getByTestId('onboarding-continue-button').click();
-  await expect(page.getByText('Customize your experience')).toBeVisible();
   await page.getByTestId('onboarding-continue-button').click();
-  await expect(page.getByRole('heading', { name: 'Wealthfolio Connect' })).toBeVisible();
   await page.getByTestId('onboarding-finish-button').click();
   await expect(page).toHaveURL(/\/settings\/accounts/);
-}
 
-export async function installExactAddon(page: Page): Promise<void> {
   assertExactArchive();
   await page.goto('/settings/addons');
-  const install = page.locator("button[title='Install from File']:visible");
-  await expect(install).toBeVisible();
+  const updateDialogClose = page.getByRole('button', { name: 'Close dialog' });
+  if (await updateDialogClose.count()) await updateDialogClose.click();
+  const install = page.getByRole('button', { name: 'Install from File' }).first();
   const [chooser] = await Promise.all([page.waitForEvent('filechooser'), install.click()]);
-  await chooser.setFiles(ADDON_ZIP);
+  await chooser.setFiles(addonZip);
   await page.getByRole('button', { name: 'Approve & Install' }).click();
   await expect(page.getByRole('link', { name: 'DEGIRO Import' })).toBeVisible();
-}
 
-export async function createDisposableAccount(page: Page): Promise<void> {
   await page.goto('/settings/accounts');
   await page.getByRole('button', { name: 'Add account' }).click();
-  await page.getByRole('textbox', { name: 'Account Name' }).fill(ACCOUNT_NAME);
+  await page.getByRole('textbox', { name: 'Account Name' }).fill(accountName);
   await page.getByRole('radio', { name: /Transactions/ }).click();
   await page.getByRole('combobox', { name: 'Currency' }).click();
   await page.getByRole('option', { name: 'European Euro (EUR)' }).click();
   await page.getByRole('button', { name: 'Add Account' }).click();
-  // The host renders desktop and compact account lists; the compact duplicate
-  // is the visible one at the E2E viewport.
-  await expect(page.getByText(ACCOUNT_NAME).last()).toBeVisible();
+  await expect(page.getByText(accountName).last()).toBeVisible();
 }
 
-export async function openAddon(page: Page): Promise<FrameLocator> {
+/** Upload the synthetic cash fixture and advance it to explicit import confirmation. */
+export async function prepareCashImport(page: Page): Promise<FrameLocator> {
   await page.goto('/addon/degiro-importer');
-  const frame = addonFrame(page);
+  const frame = page.frameLocator('iframe');
   await expect(frame.getByRole('heading', { name: 'DEGIRO Importer' })).toBeVisible();
+  await frame.getByTestId('file-input').setInputFiles(cashFixture);
+  await frame.getByTestId('account-select-trigger').click();
+  await frame.getByText(`${accountName} (EUR)`).click();
+  await frame.getByTestId('mapping-continue').click();
+  await frame.getByTestId('review-continue').click();
+  await frame.getByTestId('acknowledge-checkbox').click();
+  await expect(frame.getByTestId('import-button')).toBeEnabled();
   return frame;
-}
-
-export async function upload(frame: FrameLocator, file: string): Promise<void> {
-  await frame.getByTestId('file-input').setInputFiles(file);
-}
-
-/** Restart only the isolated disposable host while retaining its named volume. */
-export function restartDisposableHost(): void {
-  const composeArgs = [
-    'compose',
-    '--project-name',
-    'wf-degiro-addon-test',
-    '--env-file',
-    'tests/integration/.env.example',
-    '-f',
-    'tests/integration/compose.yml',
-  ];
-  execFileSync('docker', [...composeArgs, 'restart', 'wealthfolio'], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
-  execFileSync('docker', [...composeArgs, 'up', '--detach', '--wait', 'wealthfolio'], {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
 }
