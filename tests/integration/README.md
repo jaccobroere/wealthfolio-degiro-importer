@@ -1,74 +1,22 @@
-# Disposable Wealthfolio 3.6.1 integration host
+# Disposable Wealthfolio host
 
-This harness is exclusively for the DEGIRO add-on integration gate. It starts the
-pinned `wealthfolio/wealthfolio:3.6.1` image by digest with project name
-`wf-degiro-addon-test`, one disposable named volume
-`wf-degiro-addon-test-data`, and a loopback-only port (`127.0.0.1:18088` by
-default). It does not use any external Docker network, production hostname,
-volume, account, or credential.
+The host smoke test uses a pinned Wealthfolio 3.6.1 image, a loopback-only
+port, and one disposable named volume. It has no production credentials,
+network, or storage.
 
-The host has one committed **synthetic, disposable** login only:
-`synthetic-test-password`. Its test-only Argon2id hash is in the Compose file
-solely because Wealthfolio requires an authenticated session to manage add-ons.
+Run it with:
 
-## Run
+```sh
+pnpm test:host
+```
+
+The command builds and validates the release ZIP, starts a clean host, imports
+one synthetic cash CSV, then verifies a repeat import creates no activities.
+It cleans up the host and volume automatically.
+
+For host debugging only, the underlying commands remain available:
 
 ```sh
 pnpm integration:up
-pnpm integration:down
-```
-
-## Browser E2E
-
-`pnpm test:e2e` starts and tears down this same pinned, loopback-only Compose
-project itself. It verifies the SHA256SUMS-validated release ZIP (never `dist/`),
-installs it, exercises route lifecycle, and uses only committed synthetic CSVs
-and a disposable account. The suite is deliberately sequential (`workers: 1`).
-
-```sh
-pnpm test:e2e
-```
-
-The suite has no screenshots, videos, traces, HTML dumps, or raw-console
-capture. A real statement is never read unless its absolute path is explicitly
-provided. The opt-in parse-only run does not select an account or perform any
-mapping, reconciliation, or write:
-
-```sh
-DEGIRO_ACCEPTANCE_CSV=/absolute/path/to/Account.csv pnpm test:e2e:acceptance
-```
-
-The browser-visible host cannot expose bridge call ordering or stored metadata.
-The E2E suite proves write outcomes and duplicate behavior; the adapter suite
-proves the supported `checkImport`-before-`import` call ordering.
-
-The synthetic mapping-persistence test restarts only the `wealthfolio` service
-without deleting the named disposable volume, then global teardown removes the
-entire project. It saves a mapping configuration only—never an asset or an
-activity—and proves the host returns it after restart. The accrued-interest
-fixture explicitly selects a returned canonical identity for a generic
-host-supported test instrument, but remains gated because the source-confirmed
-valuation-history response returned no entries for the installed-importer
-synthetic scenario.
-
-Before any browser proof, validate the archive named by the current
-`package.json` against `artifacts/SHA256SUMS`. The harness never tests `dist/`
-or a loose add-on bundle. CI performs that package proof, installs the archive
-in a fresh host, and uploads the committed masked CSV fixtures through the
-actual add-on UI.
-
-For the optional local personal-statement parse-only gate, set
-`DEGIRO_ACCEPTANCE_CSV` to an absolute path. The test uploads that file through
-the installed add-on UI, asserts only the reviewed aggregate summary, and
-never proceeds to mapping, reconciliation, or import/write actions. The path,
-file name, contents, screenshots, traces, HTML, network bodies, and raw
-console output are not captured.
-
-## Cleanup
-
-Always run `pnpm integration:down`. It deletes only this Compose project's
-containers and its explicitly named disposable test volume:
-
-```sh
 pnpm integration:down
 ```

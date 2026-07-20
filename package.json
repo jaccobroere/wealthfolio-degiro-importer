@@ -31,8 +31,6 @@
     "format": "prettier --check .",
     "format:check": "prettier --check .",
     "test": "vitest run",
-    "test:e2e": "playwright test -c playwright.config.ts",
-    "test:e2e:acceptance": "playwright test -c playwright.config.ts --grep @acceptance",
     "test:watch": "vitest",
     "inspect:csv": "tsx scripts/inspect-csv.ts",
     "acceptance:local": "vitest run -c vitest.acceptance.config.ts",
@@ -40,11 +38,12 @@
     "validate:manifest": "tsx scripts/validate-manifest.ts",
     "package:addon": "sh scripts/package-addon.sh",
     "validate:package": "tsx scripts/validate-package.ts",
-    "privacy:scan": "sh scripts/privacy-scan.sh",
     "integration:up": "docker compose --project-name wf-degiro-addon-test -f tests/integration/compose.yml up --detach --wait",
     "integration:down": "docker compose --project-name wf-degiro-addon-test -f tests/integration/compose.yml down --volumes --remove-orphans",
-    "verify": "pnpm format && pnpm lint && pnpm type-check && pnpm test && pnpm build && pnpm check:fixtures && pnpm privacy:scan && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
-    "verify:release": "sh scripts/verify-release.sh"
+    "check": "pnpm format:check && pnpm lint && pnpm type-check && pnpm test && pnpm check:fixtures && pnpm build && pnpm validate:manifest",
+    "package": "pnpm build && pnpm validate:manifest && pnpm package:addon && pnpm validate:package",
+    "test:host": "pnpm package && playwright test -c playwright.config.ts",
+    "release:check": "sh scripts/release-check.sh"
   },
   "dependencies": {
     "decimal.js": "10.6.0",
