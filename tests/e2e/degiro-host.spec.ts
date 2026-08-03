@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { prepareCashImport, prepareHost } from './helpers';
+import { prepareCashImport, prepareHost, prepareLargeBatchImport } from './helpers';
 
 test('imports a packaged add-on CSV once and skips the duplicate import', async ({ page }) => {
   await prepareHost(page);
@@ -14,4 +14,12 @@ test('imports a packaged add-on CSV once and skips the duplicate import', async 
   await duplicateImport.getByTestId('import-button').click();
   await expect(duplicateImport.getByRole('heading', { name: 'Import complete' })).toBeVisible();
   await expect(duplicateImport.getByText('0 activity(ies) created successfully.')).toBeVisible();
+});
+
+test('imports a 250-row batch via chunked host writes', async ({ page }) => {
+  await prepareHost(page);
+  const view = await prepareLargeBatchImport(page);
+  await view.getByTestId('import-button').click();
+  await expect(view.getByRole('heading', { name: 'Import complete' })).toBeVisible();
+  await expect(view.getByText('250 activity(ies) created successfully.')).toBeVisible();
 });

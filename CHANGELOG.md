@@ -11,6 +11,31 @@ notes live under [`docs/releases/`](docs/releases/).
 - CI now builds the current declared add-on archive and runs the browser E2E
   suite against the pinned Wealthfolio 3.6.1 host.
 
+## 1.3.0 — 2026-08-03
+
+- Fixed: large DEGIRO statements (>=200 activities) failing at the final
+  submit step. The host import call is now chunked (default 100/ chunk);
+  per-chunk failures surface as per-row failures instead of a fatal; only a
+  complete host outage is fatal. Privacy-safe: counts only in any log
+  surface.
+- Fixed: the add-on's `api.activities.import(...)` call was being rewritten
+  by the 3.6.1 host sandbox's `es-module-lexer` rewriter into a
+  `globalThis.__wealthfolioImport(...)` call, which the host then rejected as
+  an unknown method. The add-on now dispatches via `Reflect.get` so the
+  `import` identifier is not in the call position of the minified bundle.
+  The 3.6.1 host image SHA is recorded in the source.
+- Added: a 250-row synthetic cash fixture and a disposable-host Playwright
+  test exercising the chunked-import path end-to-end against the real
+  Wealthfolio 3.6.1 host.
+
+## 1.2.7
+
+- Added a strongly masked, instrument-bearing account-statement fixture and
+  disposable-host E2E proof for mapping, `activities.import`, persistence, and
+  duplicate re-import.
+- CI now builds the current declared add-on archive and runs the browser E2E
+  suite against the pinned Wealthfolio 3.6.1 host.
+
 ## 1.2.4
 
 - Made stale remembered mappings visible, replaceable, and safely removable
