@@ -364,6 +364,8 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           blocked: flowResult.blocked,
           failed: flowResult.failedFingerprints.length,
           failures: flowResult.failures,
+          chunkSize: flowResult.chunkSize,
+          chunks: flowResult.chunks,
           ...(flowResult.fatal ? { fatal: flowResult.fatal } : {}),
         },
       });
