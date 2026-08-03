@@ -101,6 +101,15 @@ export const DEFAULT_FILTERS: ReviewFilters = {
   feesTaxesCredits: true,
 };
 
+/** Per-chunk summary of the import flow (mirrors the adapter `ImportChunkResult`). */
+export interface ImportChunkSummary {
+  index: number;
+  size: number;
+  imported: number;
+  duplicates: number;
+  failed: number;
+}
+
 /** Result of the import flow (mirrors the adapter `ImportFlowResult`). */
 export interface ImportResultSummary {
   attempted: number;
@@ -110,6 +119,11 @@ export interface ImportResultSummary {
   failed: number;
   failures: readonly { sourceRowNumbers?: readonly number[]; message: string }[];
   fatal?: string;
+  /** Chunk size used for the host import call. */
+  chunkSize?: number;
+  /** Per-chunk outcome summary (counts only). Empty for legacy single-call
+   * results that pre-date the chunking. */
+  chunks?: readonly ImportChunkSummary[];
 }
 
 /** The full wizard state. */

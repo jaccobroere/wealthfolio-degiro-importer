@@ -42,12 +42,23 @@ export function checkImport(api: HostAPI, activities: ActivityImport[]): Promise
  * host's import-specific duplicate detection, import-run bookkeeping, and
  * reviewed asset representation. Add-ons must submit the rows returned by
  * `checkImport`, with `isDraft` cleared once the user confirms the import.
+ *
+ * Uses `Reflect.get` with a string key to dodge the Wealthfolio 3.6.1 host
+ * sandbox's `es-module-lexer` rewriter: the rewriter rewrites every
+ * `import(...)` call expression into a `globalThis.__wealthfolioImport(...)`
+ * call, and the pinned host image treats `e.activities.import(t)` in the
+ * minified bundle as such an expression — even though it is a property
+ * access, not a dynamic import. The string-keyed `Reflect.get` form keeps
+ * the `import` identifier out of the source entirely, so the rewriter has
+ * nothing to match.
  */
 export function importCheckedActivities(
   api: HostAPI,
   activities: ActivityImport[],
 ): Promise<ImportActivitiesResult> {
-  return api.activities.import(activities);
+  return Reflect.apply(Reflect.get(api.activities, 'import'), api.activities, [
+    activities,
+  ]) as Promise<ImportActivitiesResult>;
 }
 
 /**

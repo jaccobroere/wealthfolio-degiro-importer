@@ -161,4 +161,24 @@ describe('DEGIRO importer page', () => {
       reader.restore();
     }
   });
+
+  it('renders the success path with a non-zero created count after the import click', async () => {
+    const { user, restoreFileReader } = await renderPageToReconcile();
+    try {
+      await user.click(screen.getByTestId('acknowledge-checkbox'));
+      await user.click(await screen.findByTestId('import-button'));
+
+      // The success path renders "Import complete" with a non-zero created count
+      // and does NOT show the fatal-error block, even when the underlying host
+      // import call goes through multiple chunks.
+      expect(await screen.findByRole('heading', { name: 'Import complete' })).toBeTruthy();
+      expect(screen.queryByText('Fatal error')).toBeNull();
+      // The EXAMPLE_CSV yields 10 activities; verify the success message
+      // reports a non-zero count.
+      const createdText = screen.getByText(/\d+ activity\(ies\) created successfully\./);
+      expect(createdText.textContent).toMatch(/[1-9]\d* activity\(ies\) created successfully\./);
+    } finally {
+      restoreFileReader();
+    }
+  });
 });

@@ -12,7 +12,7 @@ import type { ActivityImport, AssetResolutionInput } from '@wealthfolio/addon-sd
 export const IMPORTER_ID = 'degiro-importer';
 
 /** Add-on version, recorded in metadata for forward-compatibility. */
-export const IMPORTER_VERSION = '1.1.0';
+export const IMPORTER_VERSION = '1.2.0';
 
 /** Source schema version fingerprinted into every activity. */
 export const SOURCE_SCHEMA_VERSION = '1';
@@ -89,6 +89,20 @@ export interface ConvertedImport {
   duplicate: boolean;
 }
 
+/** Per-chunk summary of the import flow. */
+export interface ImportChunkResult {
+  /** 0-based chunk index in submission order. */
+  index: number;
+  /** Number of rows submitted in this chunk. */
+  size: number;
+  /** Rows the host reported imported in this chunk. */
+  imported: number;
+  /** Rows the host reported as duplicates in this chunk. */
+  duplicates: number;
+  /** Rows in this chunk that ended up in `failures`. */
+  failed: number;
+}
+
 /** Result of the import flow. */
 export interface ImportFlowResult {
   /** Number of reviewed rows submitted to Wealthfolio's import API. */
@@ -107,4 +121,8 @@ export interface ImportFlowResult {
   failures: ImportFailure[];
   /** Fatal host error, when `checkImport` or `import` threw. */
   fatal?: string;
+  /** Chunk size used for the host import call (counts only). */
+  chunkSize: number;
+  /** Per-chunk outcome summary (counts only). */
+  chunks: ImportChunkResult[];
 }
