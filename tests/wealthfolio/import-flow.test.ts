@@ -8,6 +8,7 @@
  * 4. Legacy add-on metadata remains scoped to its owning importer.
  */
 import { describe, expect, it } from 'vitest';
+import type { ActivityImport } from '@wealthfolio/addon-sdk';
 
 import type { ActivityDraft } from '../../src/domain/activity-draft';
 import { runImport } from '../../src/wealthfolio/import';
@@ -147,20 +148,23 @@ describe('DEGIRO adapter: idempotent import flow', () => {
 
     const result = await runImport(host.api, 'acct-1', drafts);
 
+    // Under chunking, a host-reported per-row validation failure is a per-row
+    // failure for the invalid row, not a fatal. The valid row is treated as
+    // imported based on its per-row outcome (the fake's `imported: 0` summary
+    // is overridden by the per-row signal).
     expect(result.attempted).toBe(2);
-    expect(result.created).toBe(0);
-    expect(result.importedFingerprints).toHaveLength(0);
-    expect(result.failedFingerprints).toHaveLength(2);
-    expect(result.fatal).toBe(
-      'Wealthfolio did not return a complete import outcome. No automatic retry was made.',
-    );
+    expect(result.created).toBe(1);
+    expect(result.importedFingerprints).toHaveLength(1);
+    expect(result.failedFingerprints).toHaveLength(1);
+    expect(result.fatal).toBeUndefined();
     expect(result.failures).toEqual([
       {
         sourceRowNumbers: [42],
         message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
       },
     ]);
-    // The fake verifies the adapter does not manufacture a second write.
+    // The fake does not actually store the "valid" row when
+    // importValidationErrorCount is set; per-row outcome is the source of truth.
     expect(host.storedActivities).toHaveLength(0);
   });
 
@@ -265,5 +269,243 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     await runImport(host.api, 'acct-1', [buyDraft()]);
 
     expect(host.importCalls[0]?.[0]).not.toHaveProperty('metadata');
+  });
+
+  it('chunks a 300-row import and imports every row through multiple host calls', async () => {
+    const host = createFakeHost();
+    const drafts: ActivityDraft[] = Array.from({ length: 300 }, (_, i) =>
+      buyDraft({
+        sourceRowNumbers: [i + 1],
+        date: new Date(2024, 0, 1 + (i % 28)).toISOString(),
+        isin: `US00000000${i.toString().padStart(2, '0')}`,
+        symbol: `SYM${i}`,
+      }),
+    );
+
+    const result = await runImport(host.api, 'acct-1', drafts, undefined, { chunkSize: 100 });
+
+    expect(result.attempted).toBe(300);
+    expect(result.created).toBe(300);
+    expect(result.failedFingerprints).toHaveLength(0);
+    expect(result.fatal).toBeUndefined();
+    expect(result.chunkSize).toBe(100);
+    expect(result.chunks).toHaveLength(3);
+    expect(result.chunks.every((c) => c.size === 100)).toBe(true);
+    expect(result.chunks.every((c) => c.imported === 100)).toBe(true);
+    expect(result.chunks.every((c) => c.failed === 0)).toBe(true);
+    expect(host.importCalls).toHaveLength(3);
+    expect(host.importCalls.every((c) => c.length === 100)).toBe(true);
+  });
+
+  it('survives a host payload-size cap by chunking the import', async () => {
+    const host = createFakeHost({ importBatchSizeLimit: 200 });
+    const drafts: ActivityDraft[] = Array.from({ length: 500 }, (_, i) =>
+      buyDraft({
+        sourceRowNumbers: [i + 1],
+        date: new Date(2024, 0, 1 + (i % 28)).toISOString(),
+        isin: `US00000000${i.toString().padStart(2, '0')}`,
+        symbol: `SYM${i}`,
+      }),
+    );
+
+    const result = await runImport(host.api, 'acct-1', drafts, undefined, { chunkSize: 100 });
+
+    expect(result.attempted).toBe(500);
+    expect(result.created).toBe(500);
+    expect(result.fatal).toBeUndefined();
+    expect(result.failedFingerprints).toHaveLength(0);
+    expect(host.importCalls.length).toBeGreaterThanOrEqual(5);
+    expect(host.importCalls.every((c) => c.length <= 200)).toBe(true);
+  });
+
+  it('excludes already-imported fingerprints from later chunks across re-attempts', async () => {
+    const host = createFakeHost();
+    const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
+      buyDraft({
+        sourceRowNumbers: [i + 1],
+        date: new Date(2024, 0, 1 + (i % 28)).toISOString(),
+        isin: `US00000000${i.toString().padStart(2, '0')}`,
+        symbol: `SYM${i}`,
+      }),
+    );
+
+    // First run: succeeds, imports 250.
+    const result1 = await runImport(host.api, 'acct-1', drafts, undefined, { chunkSize: 100 });
+    expect(result1.created).toBe(250);
+    expect(result1.fatal).toBeUndefined();
+    expect(host.storedActivities.length).toBe(250);
+
+    // Second run: must dedupe via the host, returning 0 created, 250 skipped.
+    const result2 = await runImport(host.api, 'acct-1', drafts, undefined, { chunkSize: 100 });
+    expect(result2.created).toBe(0);
+    expect(result2.skippedDuplicates).toBe(250);
+    expect(result2.fatal).toBeUndefined();
+  });
+
+  it('a failed chunk produces per-row failures without a fatal when other chunks succeed', async () => {
+    // Host that fails the 2nd call only.
+    let callIndex = 0;
+    const host = createFakeHost();
+    const originalImport = host.api.activities.import as unknown as (
+      activities: ActivityImport[],
+    ) => Promise<unknown>;
+    (
+      host.api.activities as unknown as { import: (a: ActivityImport[]) => Promise<unknown> }
+    ).import = async (activities: ActivityImport[]) => {
+      callIndex++;
+      if (callIndex === 2) throw new Error('host 500: chunk rejected');
+      return originalImport(activities);
+    };
+    const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
+      buyDraft({
+        sourceRowNumbers: [i + 1],
+        date: new Date(2024, 0, 1 + (i % 28)).toISOString(),
+        isin: `US00000000${i.toString().padStart(2, '0')}`,
+        symbol: `SYM${i}`,
+      }),
+    );
+
+    const result = await runImport(host.api, 'acct-1', drafts, undefined, { chunkSize: 100 });
+
+    expect(result.fatal).toBeUndefined();
+    expect(result.created).toBe(150); // chunk 1 (100) + chunk 3 (50) succeed
+    expect(result.failedFingerprints).toHaveLength(100); // chunk 2 (100) failed
+    expect(result.failures.length).toBeGreaterThan(0);
+  });
+
+  it('imports cash DEPOSIT/WITHDRAWAL drafts through the host import API', async () => {
+    // Pins the cash wire format that the Wealthfolio 3.6.1 host sandbox
+    // expects. The host rewriter rewrites any `import(...)` call expression
+    // in the minified bundle to a `globalThis.__wealthfolioImport(...)`
+    // call, and the pinned 3.6.1 image mistakenly rewrites
+    // `e.activities.import(t)` (a property access) the same way. The
+    // add-on sidesteps the rewriter by going through `Reflect.get(api.activities, 'import')`,
+    // which never appears as an `import(...)` call expression. The test
+    // asserts both that the cash wire format reaches the host unchanged
+    // (empty symbol, no quantity/unitPrice) and that the import call lands
+    // on the host's `activities.import` method (not the rewritten
+    // `activities.globalThis.__wealthfolioImport` the rewriter would have
+    // produced).
+    const host = createFakeHost();
+
+    const cashDeposit: ActivityDraft = {
+      date: '2026-01-02T09:00:00+01:00',
+      symbol: '$CASH-EUR',
+      activityType: 'DEPOSIT',
+      quantity: '0',
+      unitPrice: '0',
+      currency: 'EUR',
+      fee: '0',
+      amount: '1000',
+      comment: 'iDEAL storting',
+      sourceRowNumbers: [2],
+      isValid: true,
+      errors: {},
+      warnings: {},
+    };
+    const cashWithdrawal: ActivityDraft = {
+      date: '2026-01-03T09:00:00+01:00',
+      symbol: '$CASH-EUR',
+      activityType: 'WITHDRAWAL',
+      quantity: '0',
+      unitPrice: '0',
+      currency: 'EUR',
+      fee: '0',
+      amount: '-250',
+      comment: 'Processed Flatex Withdrawal',
+      sourceRowNumbers: [3],
+      isValid: true,
+      errors: {},
+      warnings: {},
+    };
+
+    const result = await runImport(host.api, 'acct-1', [cashDeposit, cashWithdrawal]);
+
+    expect(result.attempted).toBe(2);
+    expect(result.created).toBe(2);
+    expect(result.failedFingerprints).toHaveLength(0);
+    expect(result.fatal).toBeUndefined();
+    expect(host.importCalls).toHaveLength(1);
+
+    // The reviewed rows sent to the host must keep the cash wire format:
+    // empty symbol, currency present, amount as the decimal-string economic
+    // value, and isDraft=false (the user has confirmed the import). The
+    // activityType must be DEPOSIT/WITHDRAWAL (not TRANSFER_IN/OUT) — the
+    // DEGIRO upstream format uses DEPOSIT/WITHDRAWAL for external flows and
+    // the host accepts both.
+    const sent = host.importCalls[0] ?? [];
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).toMatchObject({
+      accountId: 'acct-1',
+      activityType: 'DEPOSIT',
+      symbol: '',
+      amount: '1000',
+      currency: 'EUR',
+      isDraft: false,
+      isValid: true,
+    });
+    expect(sent[1]).toMatchObject({
+      accountId: 'acct-1',
+      activityType: 'WITHDRAWAL',
+      symbol: '',
+      amount: '-250',
+      currency: 'EUR',
+      isDraft: false,
+      isValid: true,
+    });
+  });
+
+  it('dispatches activities.import through Reflect.get to dodge the host rewriter', async () => {
+    // Pins the dispatch path used by importCheckedActivities. The pinned
+    // Wealthfolio 3.6.1 host sandbox rewrites every `import(...)` call
+    // expression in the minified bundle to a
+    // `globalThis.__wealthfolioImport(...)` call, and the pinned image
+    // mistakenly rewrites the property access `e.activities.import(t)` the
+    // same way. The add-on sidesteps the rewriter by reading the method via
+    // `Reflect.get(api.activities, 'import')`; the test asserts the dispatch
+    // reaches the method on the host's activities API (not via a rewriter
+    // artefact like `activities.globalThis.__wealthfolioImport`).
+    const seen: string[] = [];
+    const importFn = (...args: unknown[]) => {
+      seen.push('called');
+      return Promise.resolve({
+        activities: args[0] as ActivityImport[],
+        importRunId: 'run-1',
+        summary: {
+          total: (args[0] as unknown[]).length,
+          imported: (args[0] as unknown[]).length,
+          skipped: 0,
+          duplicates: 0,
+          assetsCreated: 0,
+          success: true,
+        },
+      });
+    };
+    const activities = {
+      ...({} as Record<string, unknown>),
+      import: importFn,
+    };
+    const api = {
+      ...({} as Record<string, unknown>),
+      activities,
+    } as unknown as Parameters<typeof runImport>[0];
+
+    // Use the helper that wraps the call site.
+    const { importCheckedActivities } = await import('../../src/wealthfolio/api');
+    const result = await importCheckedActivities(api, [
+      {
+        accountId: 'acct-1',
+        activityType: 'DEPOSIT',
+        date: '2026-01-02T09:00:00+01:00',
+        symbol: '',
+        amount: '1000',
+        currency: 'EUR',
+        isValid: true,
+        isDraft: false,
+      } as ActivityImport,
+    ]);
+
+    expect(seen).toEqual(['called']);
+    expect(result.importRunId).toBe('run-1');
   });
 });

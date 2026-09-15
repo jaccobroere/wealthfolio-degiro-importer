@@ -23,6 +23,9 @@ export function ImportResult({
 }: ImportResultProps): ReactElement {
   const hasFatal = !!result.fatal;
   const hasFailures = result.failed > 0;
+  const isPartial = !hasFatal && result.created > 0 && hasFailures;
+  const chunkCount = result.chunks?.length ?? 0;
+  const showChunkSummary = !hasFatal && chunkCount > 1;
 
   return (
     <div className="space-y-6">
@@ -46,6 +49,17 @@ export function ImportResult({
             </p>
           </div>
         </div>
+      ) : isPartial ? (
+        <div className="flex items-start gap-2 rounded-md border border-warning/50 bg-warning/10 p-3">
+          <AlertCircle className="h-5 w-5 text-warning shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium">Partial import</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {result.created} activity(ies) created successfully, {result.failed} failed. Review
+              the safe diagnostics below.
+            </p>
+          </div>
+        </div>
       ) : (
         <div className="flex items-start gap-2 rounded-md border border-success/50 bg-success/10 p-3">
           <CheckCircle2 className="h-5 w-5 text-success shrink-0 mt-0.5" />
@@ -54,6 +68,12 @@ export function ImportResult({
           </p>
         </div>
       )}
+
+      {showChunkSummary ? (
+        <p className="text-xs text-muted-foreground" data-testid="chunk-summary">
+          Imported in {chunkCount} batches.
+        </p>
+      ) : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
         <Stat label="Attempted" value={result.attempted} />
