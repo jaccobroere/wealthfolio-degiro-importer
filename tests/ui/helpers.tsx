@@ -233,7 +233,7 @@ export function cleanupUi(): void {
   cleanup();
 }
 
-function installPointerCaptureMock(): void {
+export function installPointerCaptureMock(): void {
   const elementProto = HTMLElement.prototype as HTMLElement & {
     hasPointerCapture?: (pointerId: number) => boolean;
     setPointerCapture?: (pointerId: number) => void;

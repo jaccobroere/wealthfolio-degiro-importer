@@ -38,6 +38,11 @@ export interface FakeHostOptions {
   importError?: Error;
   /** Simulate import-time validation failures for the first N reviewed rows. */
   importValidationErrorCount?: number;
+  /** When set, the host's import endpoint throws
+   * `new Error('payload too large: batch exceeds host limit')` if called with
+   * more than this many activities in a single call. Simulates a host-side
+   * payload-size cap on `activities.import`. */
+  importBatchSizeLimit?: number;
   /** When set, `checkImport` throws this error instead of resolving. */
   checkImportError?: Error;
   /** Optional host-like normalization applied by the read-only import check. */
@@ -175,6 +180,12 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     import: async (imports: ActivityImport[]): Promise<ImportActivitiesResult> => {
       importCalls.push(imports);
       if (options.importError) throw options.importError;
+      if (
+        options.importBatchSizeLimit !== undefined &&
+        imports.length > options.importBatchSizeLimit
+      ) {
+        throw new Error('payload too large: batch exceeds host limit');
+      }
       if ((options.importValidationErrorCount ?? 0) > 0) {
         const activities = imports.map((activity, index) =>
           index < (options.importValidationErrorCount ?? 0)
