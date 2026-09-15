@@ -136,6 +136,9 @@ export function classifyRow(row: DegiroRow): Classification {
   // Both "flatex interest" and "flatex interest income" (the latter is 0.00 and
   // becomes a zero-amount skip during standalone mapping).
   if (low.includes('flatex interest')) return { kind: 'INTEREST' };
+  // Monthly securities-lending revenue share, e.g. "Inkomsten uit Securities
+  // Lending - Juli". No ISIN/product on the row (account-level cash income).
+  if (low.startsWith('inkomsten uit securities lending')) return { kind: 'INTEREST' };
 
   // ── Standalone fees ────────────────────────────────────────────────────────
   if (low.includes('aansluitingskosten')) return { kind: 'FEE' };
