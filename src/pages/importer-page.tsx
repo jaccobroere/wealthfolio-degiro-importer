@@ -17,7 +17,7 @@
  * acknowledgement checkbox checked. A final confirmation precedes the single
  * import call. Upload, mapping, review, and reconciliation never write.
  */
-import { useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
 import type { AddonContext, AddonRouteLocation } from '@wealthfolio/addon-sdk';
 
 import { UploadStep } from '../components/upload-step';
@@ -37,7 +37,9 @@ import {
   type SymbolResolution,
   type ResolvedMapping,
 } from '../state/import-state';
-import type { PipelineResultWithFingerprints } from '../parser/parse-and-map';
+import { rebuildWithOverrides, type PipelineResultWithFingerprints } from '../parser/parse-and-map';
+import type { RowOverride } from '../domain/row-override';
+import { previewRowOutcome } from '../validation/preview-row';
 import { getAllAccounts, getActivities, getImportMapping, searchTicker } from '../wealthfolio/api';
 import { buildDuplicateIndex } from '../wealthfolio/duplicate-index';
 import {
@@ -69,6 +71,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   } | null>(null);
   const [loadingMappings, setLoadingMappings] = useState(false);
   const [acceptingSuggestedMappings, setAcceptingSuggestedMappings] = useState(false);
+  const [rebuilding, setRebuilding] = useState(false);
 
   // Load accounts on mount.
   useEffect(() => {
@@ -143,8 +146,58 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     };
   }, [ctx, state.accountId, state.instrumentSymbols]);
 
+  // Re-run the pure pipeline whenever the reviewer changes a row decision.
+  // `parsed` always holds the pristine CSV rows, so overrides are re-applied
+  // from the original values rather than stacked on a previous edit.
+  const parsed = state.pipeline?.parsed;
+  const overridesVersion = state.overridesVersion;
+  const overrides = state.overrides;
+  useEffect(() => {
+    if (overridesVersion === 0 || !parsed) {
+      // A reset clears the decisions; make sure the flag does not stick true
+      // when an in-flight rebuild was cancelled before it could settle.
+      setRebuilding(false);
+      return;
+    }
+    let cancelled = false;
+    setRebuilding(true);
+    rebuildWithOverrides(parsed, overrides)
+      .then((pipeline) => {
+        if (!cancelled) dispatch({ type: 'PIPELINE_REBUILT', pipeline });
+      })
+      .catch((err) => {
+        // The recorded decisions and the pipeline in state have diverged, so
+        // the batch must not be imported until a later rebuild succeeds.
+        if (cancelled) return;
+        // Deliberately does not surface `err.message`: a decimal/parse error
+        // can embed the raw source value, which must not reach a rendered
+        // surface.
+        void err;
+        dispatch({ type: 'REBUILD_FAILED', message: 'Could not recalculate the changed rows' });
+      })
+      .finally(() => {
+        if (!cancelled) setRebuilding(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [parsed, overrides, overridesVersion]);
+
+  // Exact per-row preview: re-runs the real pipeline with the candidate
+  // decision merged in, so a row's order-group siblings are accounted for.
+  // `RowEditor` defers the call, so typing is not blocked by it.
+  const predictRowOutcome = useCallback(
+    (rowIndex: number, candidate: RowOverride | null) =>
+      previewRowOutcome(parsed?.rows ?? [], overrides, rowIndex, candidate),
+    [parsed, overrides],
+  );
+
   // Derived data.
   const reviewRows = useMemo(() => buildReviewRows(state), [state]);
+  const sourceRows = useMemo(
+    () => new Map((parsed?.rows ?? []).map((r) => [r.rowIndex, r])),
+    [parsed],
+  );
   const conservation = useMemo(() => computeConservation(state), [state]);
   const residuals = useMemo(() => computeReconciliationResiduals(state), [state]);
   const gate = useMemo(() => computeImportGate(state), [state]);
@@ -429,6 +482,15 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           rows={reviewRows}
           filters={state.filters}
           onFiltersChange={(f) => dispatch({ type: 'SET_FILTERS', filters: f })}
+          sourceRows={sourceRows}
+          overrides={state.overrides}
+          onOverrideChange={(rowIndex: number, override: RowOverride | null) =>
+            dispatch({ type: 'SET_ROW_OVERRIDE', rowIndex, override })
+          }
+          onClearOverrides={() => dispatch({ type: 'CLEAR_ROW_OVERRIDES' })}
+          rebuilding={rebuilding}
+          rebuildError={state.rebuildError}
+          predict={predictRowOutcome}
           onContinue={() => dispatch({ type: 'GOTO_STEP', step: 'reconcile' })}
           onBack={() => dispatch({ type: 'GOTO_STEP', step: 'mapping' })}
         />

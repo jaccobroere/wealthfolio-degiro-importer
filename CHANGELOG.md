@@ -3,6 +3,26 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## 1.4.0 — 2026-09-15
+
+- Added: fix problem rows in the review step instead of editing the CSV. Any
+  row expands into per-row controls to edit its source values (with a live
+  preview of the resulting outcome) or ignore it. Ignored rows are accounted as
+  `user-ignored` skips so row conservation still holds; activities built from
+  edited rows carry a warning, and the reconcile step summarizes every change
+  before acknowledgement. Overrides are never written back to the source file.
+- Added: `Inkomsten uit Securities Lending` rows are classified as INTEREST.
+  They previously blocked the import as unrecognized.
+- Added: `tests/fixtures/degiro-realistic-statement.csv`, a 200-row synthetic
+  statement with a golden test asserting outcome counts, per-ledger balance
+  integrity, and fingerprint stability.
+- Fixed: three order-group mapping paths could leave a row with no outcome,
+  breaking row conservation and hiding the row from review — an orphan group
+  dropped accrued-interest rows, a zero-quantity group dropped fee/FX/tax/
+  accrued rows, and a positive in-group `Transactiebelasting` row was dropped
+  entirely. Group mapping now exits through a single guard that accounts for
+  every input row.
+
 ## 1.2.7
 
 - Added a strongly masked, instrument-bearing account-statement fixture and
