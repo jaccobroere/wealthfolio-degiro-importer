@@ -51,8 +51,8 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3(vite@8.1.5(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.1))
       '@wealthfolio/addon-dev-tools':
-        specifier: ^3.6.0
-        version: 3.6.1
+        specifier: ^3.6.2
+        version: 3.6.2
       '@wealthfolio/addon-sdk':
         specifier: ~3.6.1
         version: 3.6.1(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2094,10 +2094,10 @@ packages:
         integrity: sha512-fy9am/HWxbaGt/Sawrp90vt6Y6jQwf1RX77cz3uwoJwJVMli/e1IEwRPnMNJ7vKfPTwo0diXifkpPvwH9v7nGA==,
       }
 
-  '@wealthfolio/addon-dev-tools@3.6.1':
+  '@wealthfolio/addon-dev-tools@3.6.2':
     resolution:
       {
-        integrity: sha512-5FAOmR5cCQukezn0clOXSGbEgrRayFjbQ2Y2qlWdtxuHjw/MvpcmhGm0WYQWbKNzHanDlQ9Ie7CrRnX4MiAFJQ==,
+        integrity: sha512-Kg8suYQgYZltX1V/oApOgLvTuKzmxTtjVjK5AEqVXgI7UhRQR5oyzNt4Dy/J9skXcGkokfgB++hEpi9813/D3Q==,
       }
     engines: { node: '>=20.0.0' }
     hasBin: true
@@ -5612,7 +5612,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@wealthfolio/addon-dev-tools@3.6.1':
+  '@wealthfolio/addon-dev-tools@3.6.2':
     dependencies:
       chokidar: 4.0.3
       commander: 14.0.3
