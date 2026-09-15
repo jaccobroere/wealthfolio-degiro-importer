@@ -14,11 +14,12 @@
 import type { ReactElement } from 'react';
 import { Button, Badge, Checkbox } from '@wealthfolio/ui';
 import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
-import type {
-  ImportState,
-  ConservationSummary,
-  ReconciliationResiduals,
-  ImportGate,
+import {
+  countOverrides,
+  type ImportState,
+  type ConservationSummary,
+  type ReconciliationResiduals,
+  type ImportGate,
 } from '../state/import-state';
 import type { Reconciliation } from '../reconciliation/reconcile';
 
@@ -36,6 +37,7 @@ export interface ReconciliationPanelProps {
 export function ReconciliationPanel(props: ReconciliationPanelProps): ReactElement {
   const { state, reconciliation, conservation, residuals, gate, onAcknowledge, onImport, onBack } =
     props;
+  const overrideCounts = countOverrides(state.overrides);
 
   return (
     <div className="space-y-6">
@@ -65,6 +67,35 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
           />
         </div>
       </section>
+
+      {/* Reviewer decisions: must be visible before the acknowledgement. */}
+      {overrideCounts.ignored + overrideCounts.edited > 0 ? (
+        <section className="space-y-2" data-testid="override-audit">
+          <h3 className="text-sm font-medium">Your changes to this statement</h3>
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm space-y-1">
+            {overrideCounts.ignored > 0 ? (
+              <p>
+                <span className="font-medium">{overrideCounts.ignored} row(s) ignored</span>
+                <span className="text-muted-foreground ml-1">
+                  — excluded from the import and counted as skips.
+                </span>
+              </p>
+            ) : null}
+            {overrideCounts.edited > 0 ? (
+              <p>
+                <span className="font-medium">{overrideCounts.edited} row(s) edited</span>
+                <span className="text-muted-foreground ml-1">
+                  — activities built from them are flagged with a warning.
+                </span>
+              </p>
+            ) : null}
+            <p className="text-muted-foreground text-xs">
+              These changes affect this import only; your CSV file is untouched. The totals below
+              already reflect them.
+            </p>
+          </div>
+        </section>
+      ) : null}
 
       {/* Net positions */}
       <section className="space-y-2">
