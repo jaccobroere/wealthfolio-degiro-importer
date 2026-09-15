@@ -6,7 +6,8 @@
  *
  * Anything NOT matching one of these reasons AND not mapping to an activity or
  * group becomes `unsupported`, which blocks the batch. There is no catch-all
- * silent skip.
+ * silent skip: the only non-content-derived reason is `user-ignored`, which
+ * requires a deliberate per-row decision in the review step.
  */
 export type SkipReason =
   /** Daily price ticks / conversions of the money-market fund (LU1959429272). */
@@ -41,7 +42,13 @@ export type SkipReason =
    * Bare `Rente` account-level interest bookkeeping with no ISIN; the economic
    * interest is captured by `flatex interest` INTEREST activities.
    */
-  | 'account-interest-bookkeeping';
+  | 'account-interest-bookkeeping'
+  /**
+   * The reviewer explicitly excluded this row during the review step. This is
+   * the only skip reason that is not derived from the row's content; it always
+   * reflects a deliberate per-row decision, never an automatic fallback.
+   */
+  | 'user-ignored';
 
 export const SKIP_REASONS: readonly SkipReason[] = [
   'money-market-fund',
@@ -56,4 +63,5 @@ export const SKIP_REASONS: readonly SkipReason[] = [
   'promotional-credit',
   'cash-equivalent-coupon',
   'account-interest-bookkeeping',
+  'user-ignored',
 ];

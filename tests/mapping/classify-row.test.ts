@@ -74,6 +74,9 @@ describe('classifyRow', () => {
     expect(
       classifyRow(row({ description: 'Flatex Interest Income', changeAmountRaw: '0,00' })).kind,
     ).toBe('INTEREST');
+    expect(classifyRow(row({ description: 'Inkomsten uit Securities Lending - Juli' })).kind).toBe(
+      'INTEREST',
+    );
     expect(
       classifyRow(row({ description: 'DEGIRO Aansluitingskosten 2026 (Xetra - XET)' })).kind,
     ).toBe('FEE');

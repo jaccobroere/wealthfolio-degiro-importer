@@ -28,8 +28,11 @@ export interface OrderGroupResult {
   /** Per-row membership record (rowIndex → activityIndex + role). */
   memberships: { rowIndex: number; activityIndex: number; role: GroupMemberRole }[];
   /** Rows in this group that are skipped as orphan (no parent trade). */
-  orphanSkips: { rowIndex: number; role: 'trade' | 'fx' | 'fee' | 'tax' }[];
+  orphanSkips: { rowIndex: number; role: OrphanRole }[];
 }
+
+/** Why a group row ended up skipped rather than contributing to an activity. */
+export type OrphanRole = 'trade' | 'fx' | 'fee' | 'tax' | 'accrued';
 
 /**
  * Process all rows sharing one order id. Produces one aggregated BUY/SELL
@@ -59,11 +62,9 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   }
 
   if (tradeRows.length === 0) {
-    // Orphan group (FX/fee/tax rows carrying an order id but no parent trade).
-    for (const row of fxRows) orphanSkips.push({ rowIndex: row.rowIndex, role: 'fx' });
-    for (const row of feeRows) orphanSkips.push({ rowIndex: row.rowIndex, role: 'fee' });
-    for (const row of taxRows) orphanSkips.push({ rowIndex: row.rowIndex, role: 'tax' });
-    return { activities, memberships, orphanSkips };
+    // Orphan group (FX/fee/tax/accrued rows carrying an order id but no parent
+    // trade). `finalize` sweeps them all up.
+    return finalize(rows, { activities, memberships, orphanSkips });
   }
 
   const firstTrade = tradeRows[0];
@@ -85,9 +86,9 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   }
 
   if (totalQty.isZero()) {
-    // No usable quantity — treat trade rows as orphan skips defensively.
-    for (const row of tradeRows) orphanSkips.push({ rowIndex: row.rowIndex, role: 'trade' });
-    return { activities, memberships, orphanSkips };
+    // No usable quantity — nothing can be derived from this group, so every
+    // row in it is swept up as a skip by `finalize`.
+    return finalize(rows, { activities, memberships, orphanSkips });
   }
 
   // Effective unit price from authoritative mutation totals.
@@ -234,7 +235,39 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
     }
   }
 
-  return { activities, memberships, orphanSkips };
+  return finalize(rows, { activities, memberships, orphanSkips });
+}
+
+/**
+ * Conservation guard: every row handed to `mapOrderGroup` must leave it with
+ * either a membership or an orphan skip.
+ *
+ * Several branches legitimately decline to build an activity from a row — an
+ * order group with no parent trade, a group whose fills sum to zero quantity, a
+ * positive (reversal) in-group FTT row. Without this sweep those rows would
+ * leave the mapper with no outcome at all, which silently breaks the batch's
+ * row-conservation invariant and makes the row invisible in the review table.
+ * Routing the leftovers here keeps that impossible by construction.
+ */
+function finalize(rows: DegiroRow[], result: OrderGroupResult): OrderGroupResult {
+  const claimed = new Set<number>();
+  for (const m of result.memberships) claimed.add(m.rowIndex);
+  for (const o of result.orphanSkips) claimed.add(o.rowIndex);
+  for (const row of rows) {
+    if (claimed.has(row.rowIndex)) continue;
+    result.orphanSkips.push({ rowIndex: row.rowIndex, role: orphanRole(row) });
+  }
+  return result;
+}
+
+/** The orphan role a group row falls back to when it yields no activity. */
+function orphanRole(row: DegiroRow): OrphanRole {
+  const c = classifyRow(row).kind;
+  if (c === 'TRADE_FEE') return 'fee';
+  if (c === 'ACCRUED_INTEREST') return 'accrued';
+  if (c === 'FX') return 'fx';
+  if (c === 'TAX') return 'tax';
+  return 'trade';
 }
 
 /** Build a TAX activity for a single FTT (`transactiebelasting`) row. */

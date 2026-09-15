@@ -17,6 +17,7 @@
  */
 
 import type { BatchOutcome } from '../domain/import-outcome';
+import type { RowOverride, RowOverrides } from '../domain/row-override';
 import type { PipelineResultWithFingerprints } from '../parser/parse-and-map';
 
 /** The six wizard phases. `importing` and `done` are terminal-ish (done resets). */
@@ -147,6 +148,20 @@ export interface ImportState {
   importedFingerprints: Set<string>;
   /** Review filter toggles. */
   filters: ReviewFilters;
+  /** Reviewer per-row ignore/edit decisions, keyed by source row number. */
+  overrides: RowOverrides;
+  /**
+   * Bumped by every override mutation. `0` means "pristine upload"; the page
+   * rebuilds the pipeline whenever this changes, so the counter is what makes
+   * the rebuild effect fire exactly once per decision.
+   */
+  overridesVersion: number;
+  /**
+   * Set when re-running the pipeline after a reviewer decision failed. While it
+   * is set, `pipeline` no longer reflects `overrides`, so the batch is not safe
+   * to import.
+   */
+  rebuildError: string | null;
   /** User acknowledgement checkbox on the reconcile step. */
   acknowledged: boolean;
   /** Whether the import is currently running (transient `importing` step). */
@@ -170,6 +185,9 @@ export function initialImportState(): ImportState {
     instrumentSymbols: [],
     importedFingerprints: new Set(),
     filters: { ...DEFAULT_FILTERS },
+    overrides: {},
+    overridesVersion: 0,
+    rebuildError: null,
     acknowledged: false,
     importing: false,
     importResult: null,
@@ -189,6 +207,12 @@ export type ImportAction =
   | { type: 'RESOLVE_SYMBOL'; sourceTickerOrIsin: string; resolution: SymbolResolution }
   | { type: 'GOTO_STEP'; step: WizardStep }
   | { type: 'SET_FILTERS'; filters: Partial<ReviewFilters> }
+  /** Set (or clear, when `override` is null) one row's reviewer decision. */
+  | { type: 'SET_ROW_OVERRIDE'; rowIndex: number; override: RowOverride | null }
+  | { type: 'CLEAR_ROW_OVERRIDES' }
+  | { type: 'REBUILD_FAILED'; message: string }
+  /** Pipeline recomputed from the pristine rows + current overrides. */
+  | { type: 'PIPELINE_REBUILT'; pipeline: PipelineResultWithFingerprints }
   | { type: 'SET_ACKNOWLEDGED'; acknowledged: boolean }
   | { type: 'IMPORT_START' }
   | { type: 'IMPORT_SUCCESS'; result: ImportResultSummary }
@@ -284,6 +308,38 @@ export interface ReviewRow {
   hasAccruedInterest?: boolean;
   /** Whether this activity has warnings. */
   hasWarnings?: boolean;
+  /** Reviewer decision covering this row, when one is active. */
+  overrideKind?: 'ignore' | 'edit';
+}
+
+/**
+ * The reviewer decision covering a review row.
+ *
+ * An ignored source row never contributes to an activity, so activity rows can
+ * only ever report `edit`; `ignore` shows up on the row's own known-skip entry.
+ */
+function overrideKindFor(
+  overrides: RowOverrides,
+  rowNumbers: readonly number[],
+): 'ignore' | 'edit' | undefined {
+  let edited = false;
+  for (const n of rowNumbers) {
+    const o = overrides[n];
+    if (o?.kind === 'ignore') return 'ignore';
+    if (o?.kind === 'edit') edited = true;
+  }
+  return edited ? 'edit' : undefined;
+}
+
+/** Count active reviewer decisions by kind. */
+export function countOverrides(overrides: RowOverrides): { ignored: number; edited: number } {
+  let ignored = 0;
+  let edited = 0;
+  for (const o of Object.values(overrides)) {
+    if (o.kind === 'ignore') ignored++;
+    else edited++;
+  }
+  return { ignored, edited };
 }
 
 /**
@@ -295,7 +351,7 @@ export interface ReviewRow {
  * Known-skip, unsupported, and invalid outcomes each get their own row.
  */
 export function buildReviewRows(state: ImportState): ReviewRow[] {
-  const { pipeline, importedFingerprints, symbolResolutions } = state;
+  const { pipeline, importedFingerprints, symbolResolutions, overrides } = state;
   if (!pipeline) return [];
   const { batch, fingerprints } = pipeline;
 
@@ -325,10 +381,13 @@ export function buildReviewRows(state: ImportState): ReviewRow[] {
       category = 'new-valid';
     }
 
+    const sourceRowNumbers = [...a.sourceRowNumbers].sort((x, y) => x - y);
+    const overrideKind = overrideKindFor(overrides, sourceRowNumbers);
     const row: ReviewRow = {
-      sourceRowNumbers: [...a.sourceRowNumbers].sort((x, y) => x - y),
+      sourceRowNumbers,
       outcomeKind: a.group ? 'group-member' : 'activity',
       category,
+      ...(overrideKind ? { overrideKind } : {}),
       activityType: a.activityType,
       symbol: a.symbol,
       ...(a.isin ? { isin: a.isin } : {}),
@@ -348,47 +407,38 @@ export function buildReviewRows(state: ImportState): ReviewRow[] {
   // Second pass: outcomes that are NOT activity/group-member (skips, unsupported, invalid).
   for (const o of batch.outcomes) {
     if (o.kind === 'activity' || o.kind === 'group-member') continue;
+    const overrideKind = overrideKindFor(overrides, [o.rowIndex]);
+    const base = {
+      sourceRowNumbers: [o.rowIndex],
+      activityType: null,
+      symbol: null,
+      currency: null,
+      quantity: null,
+      amount: null,
+      fee: null,
+      date: null,
+      ...(overrideKind ? { overrideKind } : {}),
+    };
     if (o.kind === 'known-skip') {
       rows.push({
-        sourceRowNumbers: [o.rowIndex],
+        ...base,
         outcomeKind: 'known-skip',
         category: 'known-skip',
-        activityType: null,
-        symbol: null,
-        currency: null,
-        quantity: null,
-        amount: null,
-        fee: null,
-        date: null,
         skipReason: o.reason,
       });
     } else if (o.kind === 'unsupported') {
       rows.push({
-        sourceRowNumbers: [o.rowIndex],
+        ...base,
         outcomeKind: 'unsupported',
         category: 'requires-review',
-        activityType: null,
-        symbol: null,
-        currency: null,
-        quantity: null,
-        amount: null,
-        fee: null,
-        date: null,
         reason: o.reason,
       });
     } else {
       // invalid
       rows.push({
-        sourceRowNumbers: [o.rowIndex],
+        ...base,
         outcomeKind: 'invalid',
         category: 'fatal-invalid',
-        activityType: null,
-        symbol: null,
-        currency: null,
-        quantity: null,
-        amount: null,
-        fee: null,
-        date: null,
         reason: o.reason,
       });
     }
@@ -553,11 +603,20 @@ export function computeImportGate(state: ImportState): ImportGate {
     blockers.push('No file uploaded');
   }
 
+  if (state.rebuildError !== null) {
+    blockers.push('Re-check the rows you changed; recalculating them failed');
+  }
+
   if (!state.acknowledged) {
     blockers.push('Reconciliation not acknowledged');
   }
 
   return { enabled: blockers.length === 0, blockers };
+}
+
+/** Whether two sorted string arrays hold the same values. */
+function sameStrings(a: readonly string[], b: readonly string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
 /** Reducer. */
@@ -572,6 +631,9 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
         uploadSummary: action.summary,
         instrumentSymbols: extractInstrumentSymbols(action.pipeline.batch),
         symbolResolutions: {},
+        overrides: {},
+        overridesVersion: 0,
+        rebuildError: null,
         acknowledged: false,
         importResult: null,
         importError: null,
@@ -613,6 +675,45 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
       return { ...state, step: action.step };
     case 'SET_FILTERS':
       return { ...state, filters: { ...state.filters, ...action.filters } };
+    case 'SET_ROW_OVERRIDE': {
+      const next = { ...state.overrides };
+      if (action.override === null) delete next[action.rowIndex];
+      else next[action.rowIndex] = action.override;
+      // Changing the data invalidates the reconciliation the user acknowledged.
+      return {
+        ...state,
+        overrides: next,
+        overridesVersion: state.overridesVersion + 1,
+        acknowledged: false,
+      };
+    }
+    case 'CLEAR_ROW_OVERRIDES':
+      if (Object.keys(state.overrides).length === 0) return state;
+      return {
+        ...state,
+        overrides: {},
+        overridesVersion: state.overridesVersion + 1,
+        acknowledged: false,
+      };
+    case 'PIPELINE_REBUILT': {
+      const instrumentSymbols = extractInstrumentSymbols(action.pipeline.batch);
+      return {
+        ...state,
+        pipeline: action.pipeline,
+        uploadSummary: computeUploadSummary(action.pipeline),
+        // Preserve the array identity when the set is unchanged: the page's
+        // mapping effect depends on it and would otherwise refetch on every edit.
+        instrumentSymbols: sameStrings(state.instrumentSymbols, instrumentSymbols)
+          ? state.instrumentSymbols
+          : instrumentSymbols,
+        rebuildError: null,
+        acknowledged: false,
+      };
+    }
+    case 'REBUILD_FAILED':
+      // The recorded overrides no longer match the pipeline in state, so the
+      // batch is not safe to import until a rebuild succeeds or is undone.
+      return { ...state, rebuildError: action.message };
     case 'SET_ACKNOWLEDGED':
       return { ...state, acknowledged: action.acknowledged };
     case 'IMPORT_START':

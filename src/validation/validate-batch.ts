@@ -16,15 +16,32 @@
  *    INTEREST/FEE                        → standalone activity (or zero-amount
  *                                          / positive-reversal skip).
  *  - anything else                       → unsupported (blocks the batch).
+ *
+ * Reviewer overrides are applied first: an ignored row short-circuits to a
+ * `user-ignored` known-skip, and an edited row continues through every rule
+ * above with its patched values.
  */
 
 import type { DegiroRow } from '../domain/degiro-row';
 import type { ActivityDraft } from '../domain/activity-draft';
 import type { BatchOutcome, BatchSummary, RowOutcome } from '../domain/import-outcome';
+import type { SkipReason } from '../domain/skip-reason';
+import { applyRowPatch, changedFields, type RowOverrides } from '../domain/row-override';
 import { classifyRow } from '../mapping/classify-row';
-import { mapOrderGroup } from '../mapping/map-order-group';
+import { mapOrderGroup, type OrphanRole } from '../mapping/map-order-group';
 import { mapStandalone } from '../mapping/map-standalone';
 import { validateRow } from './validate-row';
+
+/** Warning key attached to activities derived from a reviewer-edited row. */
+export const SOURCE_EDITED_WARNING = 'sourceEdited';
+
+/**
+ * Warning key attached to an activity whose order group contains a row the
+ * reviewer changed. The activity is still built, but from different rows or
+ * different values, so its quantity, amount, or fee may no longer reflect the
+ * whole order.
+ */
+export const GROUP_ROW_CHANGED_WARNING = 'groupRowChanged';
 
 /** Kinds that belong to an order-id group when an order id is present. */
 const GROUPABLE_KINDS = new Set(['BUY', 'SELL', 'TRADE_FEE', 'ACCRUED_INTEREST', 'FX', 'TAX']);
@@ -40,13 +57,34 @@ function isGroupable(
  * Produce a fully-accounted batch outcome from parsed rows. `activities` are in
  * deterministic chronological order; `outcomes` are in source-row order.
  */
-export function buildBatch(rows: DegiroRow[]): BatchOutcome {
+export function buildBatch(rows: DegiroRow[], overrides: RowOverrides = {}): BatchOutcome {
   const outcomes: RowOutcome[] = [];
   const activities: ActivityDraft[] = [];
 
+  // 0) Reviewer overrides. Ignored rows are accounted immediately as explicit
+  //    skips; edited rows enter the pipeline with their patched values.
+  const effectiveRows: DegiroRow[] = [];
+  const editedRowIndices = new Set<number>();
+  const touchedOrderIds = new Set<string>();
+  for (const row of rows) {
+    const override = overrides[row.rowIndex];
+    if (override?.kind === 'ignore') {
+      outcomes.push({ kind: 'known-skip', rowIndex: row.rowIndex, reason: 'user-ignored' });
+      if (row.orderId !== '') touchedOrderIds.add(row.orderId);
+      continue;
+    }
+    if (override?.kind === 'edit' && changedFields(row, override.patch).length > 0) {
+      editedRowIndices.add(row.rowIndex);
+      if (row.orderId !== '') touchedOrderIds.add(row.orderId);
+      effectiveRows.push(applyRowPatch(row, override.patch));
+      continue;
+    }
+    effectiveRows.push(row);
+  }
+
   // 1) Structural per-row validation.
   const validRows: DegiroRow[] = [];
-  for (const row of rows) {
+  for (const row of effectiveRows) {
     const errors = validateRow(row);
     if (errors.length > 0) {
       outcomes.push({
@@ -96,12 +134,7 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
       outcomes.push({
         kind: 'known-skip',
         rowIndex: orphan.rowIndex,
-        reason:
-          orphan.role === 'fx'
-            ? 'fx-helper'
-            : orphan.role === 'fee'
-              ? 'orphan-trade-fee'
-              : 'positive-reversal',
+        reason: orphanSkipReason(orphan.role),
       });
     }
   }
@@ -125,7 +158,7 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
         outcomes.push({
           kind: 'known-skip',
           rowIndex: orphan.rowIndex,
-          reason: 'orphan-trade-fee',
+          reason: orphanSkipReason(orphan.role),
         });
       }
       continue;
@@ -199,8 +232,82 @@ export function buildBatch(rows: DegiroRow[]): BatchOutcome {
     }
   }
 
+  annotateEditedActivities(activities, editedRowIndices);
+  annotateChangedGroups(activities, touchedOrderIds);
+
   const summary = summarize(rows.length, outcomes, activities);
   return { outcomes, activities, summary };
+}
+
+/**
+ * Mark every activity that draws on a reviewer-edited source row.
+ *
+ * The warning keeps edits visible in the review counts and the reconcile step;
+ * it never invalidates the draft, and it is not part of the fingerprint, so an
+ * edited activity still matches its previously-imported twin when the corrected
+ * values are identical.
+ */
+function annotateEditedActivities(
+  activities: ActivityDraft[],
+  editedRowIndices: Set<number>,
+): void {
+  if (editedRowIndices.size === 0) return;
+  for (const a of activities) {
+    if (!a.sourceRowNumbers.some((n) => editedRowIndices.has(n))) continue;
+    a.warnings = {
+      ...a.warnings,
+      [SOURCE_EDITED_WARNING]: ['Built from source values you edited during review'],
+    };
+  }
+}
+
+/**
+ * Mark every activity whose order group contains a row the reviewer changed.
+ *
+ * `annotateEditedActivities` is not enough here. An activity's
+ * `sourceRowNumbers` lists only its trade and fee rows, and a changed row may
+ * not be among them at all: an ignored row is dropped before grouping, an edit
+ * can reclassify a fill out of its group entirely, and an edited FX row shifts
+ * the converted fee without ever being listed. In each case the trade's
+ * quantity, amount, or fee moves while the activity still reviews as clean.
+ *
+ * Keyed on the order id, which is not editable, so a row cannot change which
+ * group it is accounted against. Rows with no order id are excluded: each forms
+ * its own single-row group and cannot affect another activity.
+ */
+function annotateChangedGroups(activities: ActivityDraft[], touchedOrderIds: Set<string>): void {
+  if (touchedOrderIds.size === 0) return;
+  for (const a of activities) {
+    const orderId = a.group?.orderId;
+    if (!orderId || !touchedOrderIds.has(orderId)) continue;
+    a.warnings = {
+      ...a.warnings,
+      [GROUP_ROW_CHANGED_WARNING]: [
+        'You changed another row of this order — its quantity, amount, or fee may be incomplete',
+      ],
+    };
+  }
+}
+
+/**
+ * Skip reason for a group row that yielded no activity.
+ *
+ * `trade` only arises when a group's fills sum to zero quantity, so there is no
+ * economic movement to record; `tax` only arises for a positive (reversal) FTT
+ * row, which nets against its paid counterpart.
+ */
+function orphanSkipReason(role: OrphanRole): SkipReason {
+  switch (role) {
+    case 'fx':
+      return 'fx-helper';
+    case 'fee':
+    case 'accrued':
+      return 'orphan-trade-fee';
+    case 'tax':
+      return 'positive-reversal';
+    case 'trade':
+      return 'zero-amount';
+  }
 }
 
 /** Compute the privacy-safe batch summary (counts and reason codes only). */
