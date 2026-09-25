@@ -40,6 +40,14 @@ describe('repeatOccurrences', () => {
   });
 });
 
+describe('repeatOccurrences for cash-stored types', () => {
+  it('ignores the security for types the host stores as cash', () => {
+    const tax = (isin: string) =>
+      dividend('07:58', { activityType: 'TAX', isin, symbol: isin, comment: 'Dividendbelasting' });
+    expect(repeatOccurrences([tax('IE00SYN00002'), tax('IE00SYN00003')])).toEqual([1, 2]);
+  });
+});
+
 describe('occurrenceComment', () => {
   it('keeps the first copy unchanged and numbers the rest', () => {
     expect(occurrenceComment('Dividend', 1)).toBe('Dividend');
