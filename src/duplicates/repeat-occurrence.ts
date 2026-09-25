@@ -18,13 +18,26 @@
 
 import type { ActivityDraft } from '../domain/activity-draft';
 
+/**
+ * Types Wealthfolio always stores as cash: it clears their symbol before
+ * computing the duplicate key, so the security must not separate them here
+ * (e.g. equal dividend tax on two securities on one day).
+ */
+const HOST_CASH_TYPES: ReadonlySet<string> = new Set([
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'FEE',
+  'TAX',
+  'CREDIT',
+]);
+
 function hostLikeKey(a: ActivityDraft): string {
   const d = new Date(a.date);
   const day = Number.isNaN(d.getTime()) ? a.date : d.toISOString().slice(0, 10);
   return [
     a.activityType,
     day,
-    (a.isin ?? a.symbol).toUpperCase(),
+    HOST_CASH_TYPES.has(a.activityType) ? '' : (a.isin ?? a.symbol).toUpperCase(),
     a.quantity,
     a.unitPrice,
     a.amount,

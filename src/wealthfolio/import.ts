@@ -383,9 +383,22 @@ export async function runImport(
   return result;
 }
 
+/** Types the 3.6.1 host always stores as cash, clearing any symbol. */
+const HOST_CASH_TYPES: ReadonlySet<string> = new Set([
+  'DEPOSIT',
+  'WITHDRAWAL',
+  'FEE',
+  'TAX',
+  'CREDIT',
+]);
+
 /** True for a checked instrument row whose security does not exist yet. */
 function needsNewAsset(checked: ActivityImport): boolean {
-  return (checked.symbol ?? '').trim() !== '' && (checked.assetId ?? '').trim() === '';
+  return (
+    !HOST_CASH_TYPES.has(checked.activityType) &&
+    (checked.symbol ?? '').trim() !== '' &&
+    (checked.assetId ?? '').trim() === ''
+  );
 }
 
 type AcceptedRow = { prepared: PreparedDraft; checked: ActivityImport };
