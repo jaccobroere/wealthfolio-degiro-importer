@@ -42,7 +42,7 @@ describe('matchExistingActivities', () => {
     expect(report.counts).toMatchObject({ new: 0, existing: 1, extraCopies: 0 });
   });
 
-  it('compares trades on quantity and trade value, not the rounded unit price', () => {
+  it('compares trades on quantity, not on a price that differs between versions', () => {
     const buy = draft({
       activityType: 'BUY',
       quantity: '37',
@@ -53,7 +53,8 @@ describe('matchExistingActivities', () => {
     const copy = stored('a', {
       activityType: 'BUY',
       quantity: '37',
-      unitPrice: '12.4108108108108',
+      // Stored by an older version with the rounded display price.
+      unitPrice: '12.41',
       amount: null,
       assetSymbol: 'SYNA',
     });

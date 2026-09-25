@@ -62,6 +62,9 @@ export interface FakeAsset {
   name?: string;
 }
 
+/** Types the 3.6.1 host always stores without a security. */
+const HOST_CASH_TYPES = new Set(['DEPOSIT', 'WITHDRAWAL', 'FEE', 'TAX', 'CREDIT']);
+
 /** Host asset lookup key (`SYMBOL@MIC`, or `SYMBOL` without a MIC). */
 function assetKey(symbol: string, exchangeMic?: string | null): string {
   const s = symbol.trim().toUpperCase();
@@ -336,6 +339,10 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       // Mark all as valid (the adapter re-checks isValid) and, like the host,
       // attach the id of a security that already exists.
       const checked = activities.map((a) => {
+        // Like the host, never-asset types are cash movements: symbol cleared.
+        if (HOST_CASH_TYPES.has(a.activityType)) {
+          return { ...a, symbol: '', isValid: a.isValid ?? true };
+        }
         const existing = a.symbol ? findAsset(a.symbol, a.exchangeMic) : undefined;
         return {
           ...a,

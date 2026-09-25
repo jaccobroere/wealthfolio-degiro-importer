@@ -16,7 +16,7 @@
  *
  * Matching therefore uses only what is stable across exports and asset
  * states: activity type, UTC day, currency, and the economic value
- * (quantity + trade value for BUY/SELL, amount otherwise). It is a multiset
+ * (quantity for BUY/SELL, amount otherwise). It is a multiset
  * match — three identical fees on one day in the file consume at most three
  * identical existing fees — so genuinely repeated bookkeeping rows survive.
  *
@@ -101,7 +101,15 @@ function utcDay(date: string | Date): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString().slice(0, 10);
 }
 
-/** The economic value compared for a given activity type. */
+/**
+ * The economic value compared for a given activity type.
+ *
+ * Trades compare quantity only: the stored unit price differs between
+ * importer versions (rounded display price vs. cash-consistent price), so a
+ * trade value can be a cent apart for the very same trade. Day, type,
+ * currency and the security (as tie-breaker) keep trades apart. Every other
+ * type compares its amount to the cent.
+ */
 function valuePart(
   activityType: string,
   quantity: string | null | undefined,
@@ -112,10 +120,8 @@ function valuePart(
   const price = dec(unitPrice);
   const amt = dec(amount);
   if (activityType === 'BUY' || activityType === 'SELL') {
-    if (!qty) return undefined;
-    const value = price ? qty.times(price) : amt;
-    if (!value) return undefined;
-    return `q=${qty.toString()}|v=${value.toDecimalPlaces(2).toFixed(2)}`;
+    if (!qty || qty.isZero()) return undefined;
+    return `q=${qty.toString()}`;
   }
   const value = amt && !amt.isZero() ? amt : qty && price ? qty.times(price) : amt;
   if (!value) return undefined;

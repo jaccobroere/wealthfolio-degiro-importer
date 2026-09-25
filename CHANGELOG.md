@@ -3,6 +3,15 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## 1.5.1 — 2026-09-25
+
+- Fixed: same-day repeats of cash-type activities (e.g. equal dividend tax on
+  two securities) were still collapsed, because Wealthfolio ignores the
+  security for deposits, withdrawals, fees, taxes and credits.
+- Fixed: cash-type rows carrying an ISIN no longer trigger security creation.
+- Changed: trades are matched against the account on quantity rather than
+  trade value, so copies stored with a different unit price still match.
+
 ## 1.5.0 — 2026-09-25
 
 - Fixed: re-importing a full DEGIRO history added duplicate dividends and
