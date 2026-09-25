@@ -6,6 +6,7 @@ import { ImporterPage } from '../../src/pages/importer-page';
 import { ReconciliationPanel } from '../../src/components/reconciliation-panel';
 import {
   computeConservation,
+  computeAccountMatch,
   computeImportGate,
   computeReconciliationResiduals,
   computeUploadSummary,
@@ -16,6 +17,7 @@ import {
   type SymbolResolution,
 } from '../../src/state/import-state';
 import { parseAndMapWithFingerprints } from '../../src/parser/parse-and-map';
+import type { ExistingActivityLike } from '../../src/duplicates/existing-match';
 import { createFakeHost, type FakeHostOptions } from '../wealthfolio/fake-host';
 
 export const EXAMPLE_CSV = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
@@ -90,6 +92,8 @@ export async function buildState(
     acknowledged?: boolean;
     resolvedSymbols?: boolean;
     importedFingerprints?: string[];
+    /** Activities already on the account; omitted means "not loaded yet". */
+    existing?: ExistingActivityLike[];
   } = {},
 ): Promise<ImportState> {
   const {
@@ -98,6 +102,7 @@ export async function buildState(
     acknowledged = false,
     resolvedSymbols = true,
     importedFingerprints = [],
+    existing,
   } = options;
 
   const pipeline = await parseAndMapWithFingerprints(csv);
@@ -114,6 +119,7 @@ export async function buildState(
   state = importReducer(state, {
     type: 'DUPLICATE_INDEX_LOADED',
     fingerprints: new Set(importedFingerprints),
+    ...(existing ? { existing } : {}),
   });
 
   const resolutions: Record<string, SymbolResolution> = {};
@@ -148,6 +154,7 @@ export function renderReconciliation(state: ImportState) {
       conservation={computeConservation(state)}
       residuals={computeReconciliationResiduals(state)}
       gate={computeImportGate(state)}
+      accountMatch={computeAccountMatch(state)}
       onAcknowledge={() => {}}
       onImport={() => {}}
       onBack={() => {}}

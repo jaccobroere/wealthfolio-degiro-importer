@@ -32,6 +32,7 @@ import {
   computeConservation,
   computeReconciliationResiduals,
   computeImportGate,
+  computeAccountMatch,
   type ImportState,
   type UploadSummary,
   type SymbolResolution,
@@ -42,6 +43,7 @@ import type { RowOverride } from '../domain/row-override';
 import { previewRowOutcome } from '../validation/preview-row';
 import { getAllAccounts, getActivities, getImportMapping, searchTicker } from '../wealthfolio/api';
 import { buildDuplicateIndex } from '../wealthfolio/duplicate-index';
+import { toExistingActivities } from '../wealthfolio/existing-activities';
 import {
   readSavedMappings,
   resolveSymbol,
@@ -99,12 +101,17 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     const accountId = state.accountId;
     let cancelled = false;
 
-    // Load duplicate index.
+    // Load what is already on the account: legacy fingerprints plus the
+    // activities themselves, for the "already in Wealthfolio" preview.
     getActivities(ctx.api, accountId)
       .then((activities) => {
         if (cancelled) return;
         const index = buildDuplicateIndex(activities);
-        dispatch({ type: 'DUPLICATE_INDEX_LOADED', fingerprints: index.importedFingerprints });
+        dispatch({
+          type: 'DUPLICATE_INDEX_LOADED',
+          fingerprints: index.importedFingerprints,
+          existing: toExistingActivities(activities),
+        });
       })
       .catch(() => {
         // Non-fatal: empty duplicate index.
@@ -201,6 +208,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   const conservation = useMemo(() => computeConservation(state), [state]);
   const residuals = useMemo(() => computeReconciliationResiduals(state), [state]);
   const gate = useMemo(() => computeImportGate(state), [state]);
+  const accountMatch = useMemo(() => computeAccountMatch(state), [state]);
   const reconciliation = state.pipeline?.reconciliation;
 
   // Handlers.
@@ -414,6 +422,9 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           attempted: flowResult.attempted,
           created: flowResult.created,
           skippedDuplicates: flowResult.skippedDuplicates,
+          alreadyInAccount: flowResult.alreadyInAccount,
+          alreadyInAccountUnlinked: flowResult.alreadyInAccountUnlinked,
+          assetsCreated: flowResult.assetsCreated,
           blocked: flowResult.blocked,
           failed: flowResult.failedFingerprints.length,
           failures: flowResult.failures,
@@ -503,6 +514,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           conservation={conservation}
           residuals={residuals}
           gate={gate}
+          accountMatch={accountMatch}
           onAcknowledge={(checked) => dispatch({ type: 'SET_ACKNOWLEDGED', acknowledged: checked })}
           onImport={handleImport}
           onBack={() => dispatch({ type: 'GOTO_STEP', step: 'review' })}

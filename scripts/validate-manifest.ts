@@ -20,7 +20,16 @@ const expectedId = 'degiro-importer';
 const expectedPermissions: Record<string, string[]> = {
   ui: ['sidebar.addItem', 'router.add', 'onDisable'],
   accounts: ['getAll'],
-  activities: ['getAll', 'checkImport', 'import', 'getImportMapping', 'saveImportMapping'],
+  // `saveMany` only seeds one activity per security Wealthfolio does not know
+  // yet: the 3.6.1 import endpoint never creates assets.
+  activities: [
+    'getAll',
+    'checkImport',
+    'import',
+    'saveMany',
+    'getImportMapping',
+    'saveImportMapping',
+  ],
   'market-data': ['searchTicker'],
 };
 

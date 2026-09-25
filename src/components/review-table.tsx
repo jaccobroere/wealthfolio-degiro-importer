@@ -18,6 +18,7 @@ import type { ReviewCategory } from '../state/import-state';
 import type { DegiroRow } from '../domain/degiro-row';
 import type { RowOverride, RowOverrides } from '../domain/row-override';
 import { RowEditor } from './row-editor';
+import { SecurityLabel } from './security-label';
 import type { RowPreview } from '../validation/preview-row';
 
 export interface ReviewTableProps {
@@ -37,7 +38,7 @@ const COLUMN_COUNT = 9;
 
 const CATEGORY_LABEL: Record<ReviewCategory, string> = {
   'new-valid': 'New / valid',
-  duplicate: 'Duplicate',
+  duplicate: 'Already imported',
   'known-skip': 'Known skip',
   warning: 'Warning',
   'requires-review': 'Requires review',
@@ -89,7 +90,7 @@ export function ReviewTable({
               <TableHead className="w-20">Row</TableHead>
               <TableHead className="w-28">Category</TableHead>
               <TableHead className="w-24">Type</TableHead>
-              <TableHead>Symbol</TableHead>
+              <TableHead>Security</TableHead>
               <TableHead className="w-28">Date</TableHead>
               <TableHead className="w-24 text-right">Quantity</TableHead>
               <TableHead className="w-28 text-right">Amount</TableHead>
@@ -142,6 +143,16 @@ export function ReviewTable({
                     >
                       {CATEGORY_LABEL[r.category]}
                     </Badge>
+                    {r.alreadyInAccount === 'unlinked' ? (
+                      <Badge
+                        variant="warning"
+                        className="ml-1"
+                        title="The copy in Wealthfolio has no security linked"
+                        data-testid={`review-unlinked-${i}`}
+                      >
+                        No security in Wealthfolio
+                      </Badge>
+                    ) : null}
                     {r.overrideKind ? (
                       <Badge
                         variant="secondary"
@@ -153,8 +164,19 @@ export function ReviewTable({
                     ) : null}
                   </TableCell>
                   <TableCell className="text-sm">{r.activityType ?? '—'}</TableCell>
-                  <TableCell className="text-sm font-mono">
-                    {r.symbol ?? '—'}
+                  <TableCell className="text-sm">
+                    {r.symbol === null ? (
+                      '—'
+                    ) : r.symbol.startsWith('$CASH-') ? (
+                      <span className="text-muted-foreground text-xs">Cash</span>
+                    ) : (
+                      <SecurityLabel
+                        source={r.symbol}
+                        {...(r.isin ? { isin: r.isin } : {})}
+                        {...(r.symbolName ? { name: r.symbolName } : {})}
+                        {...(r.resolved ? { resolved: r.resolved } : {})}
+                      />
+                    )}
                     {r.unresolvedSymbol ? <span className="text-destructive ml-1">⚠</span> : null}
                     {r.hasAccruedInterest ? (
                       <span className="text-warning ml-1" title="Carries accrued interest">

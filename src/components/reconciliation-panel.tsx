@@ -22,6 +22,8 @@ import {
   type ImportGate,
 } from '../state/import-state';
 import type { Reconciliation } from '../reconciliation/reconcile';
+import type { ExistingActivityLike, ExistingMatchReport } from '../duplicates/existing-match';
+import { SecurityLabel } from './security-label';
 
 export interface ReconciliationPanelProps {
   state: ImportState;
@@ -29,15 +31,33 @@ export interface ReconciliationPanelProps {
   conservation: ConservationSummary;
   residuals: ReconciliationResiduals;
   gate: ImportGate;
+  /** Match against the account's activities; null while they load. */
+  accountMatch: ExistingMatchReport | null;
   onAcknowledge: (checked: boolean) => void;
   onImport: () => void;
   onBack: () => void;
 }
 
 export function ReconciliationPanel(props: ReconciliationPanelProps): ReactElement {
-  const { state, reconciliation, conservation, residuals, gate, onAcknowledge, onImport, onBack } =
-    props;
+  const {
+    state,
+    reconciliation,
+    conservation,
+    residuals,
+    gate,
+    accountMatch,
+    onAcknowledge,
+    onImport,
+    onBack,
+  } = props;
   const overrideCounts = countOverrides(state.overrides);
+  const totalActivities = state.pipeline?.batch.activities.length ?? 0;
+  const alreadyInAccount = accountMatch
+    ? accountMatch.counts.existing + accountMatch.counts.existingUnlinked
+    : 0;
+  const unlinkedOnly = accountMatch
+    ? unlinkedOnlyMatches(accountMatch, state.existingActivities)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -107,7 +127,7 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left px-3 py-1.5 font-medium">Symbol / ISIN</th>
+                  <th className="text-left px-3 py-1.5 font-medium">Security</th>
                   <th className="text-right px-3 py-1.5 font-medium">Net quantity</th>
                   <th className="text-right px-3 py-1.5 font-medium">Trades</th>
                 </tr>
@@ -115,9 +135,13 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
               <tbody>
                 {reconciliation.positions.map((p) => (
                   <tr key={p.key} className="border-t border-border">
-                    <td className="px-3 py-1.5 font-mono text-xs">
-                      {p.symbol}
-                      {p.isin ? <span className="text-muted-foreground ml-2">{p.isin}</span> : null}
+                    <td className="px-3 py-1.5">
+                      <SecurityLabel
+                        source={p.symbol}
+                        {...(p.isin ? { isin: p.isin } : {})}
+                        {...(p.symbolName ? { name: p.symbolName } : {})}
+                        {...resolvedFor(state, p.key)}
+                      />
                     </td>
                     <td className="px-3 py-1.5 text-right font-mono">{p.netQuantity}</td>
                     <td className="px-3 py-1.5 text-right">{p.tradeActivityCount}</td>
@@ -126,6 +150,54 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
               </tbody>
             </table>
           </div>
+        )}
+      </section>
+
+      {/* Already on the destination account */}
+      <section className="space-y-2" data-testid="account-match">
+        <h3 className="text-sm font-medium">Already in Wealthfolio</h3>
+        {accountMatch === null ? (
+          <p className="text-sm text-muted-foreground">
+            <Loader2 className="h-3 w-3 mr-1 inline animate-spin" />
+            Checking the activities already on this account…
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+              <Stat label="New activities" value={accountMatch.counts.new} />
+              <Stat label="Already in account (skipped)" value={alreadyInAccount} />
+              <Stat
+                label="Stored without security"
+                value={accountMatch.counts.existingUnlinked}
+                ok={accountMatch.counts.existingUnlinked === 0}
+              />
+              <Stat
+                label="Extra copies in account"
+                value={accountMatch.counts.extraCopies}
+                ok={accountMatch.counts.extraCopies === 0}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Matched on type, day, currency and amount (quantity and value for trades), so a newer
+              full export only adds what is new.
+            </p>
+            {accountMatch.extraCopies.length > 0 ? (
+              <AccountActivityList
+                testId="extra-copies"
+                title={`${accountMatch.extraCopies.length} extra cop${accountMatch.extraCopies.length === 1 ? 'y' : 'ies'} of activities in this statement`}
+                explanation="These duplicate an activity that is already in Wealthfolio, usually left behind by an earlier import. They inflate your cash and holdings. Delete them in Wealthfolio's Activities page; this import will not touch them."
+                activities={accountMatch.extraCopies}
+              />
+            ) : null}
+            {unlinkedOnly.length > 0 ? (
+              <AccountActivityList
+                testId="unlinked-matches"
+                title={`${unlinkedOnly.length} activit${unlinkedOnly.length === 1 ? 'y is' : 'ies are'} in Wealthfolio without a security`}
+                explanation="An earlier add-on version stored these before their security existed, so they move cash but not holdings. This import will not add them again. To repair them, delete them in Wealthfolio and run this import again: they will be re-created linked to their security."
+                activities={unlinkedOnly}
+              />
+            ) : null}
+          </>
         )}
       </section>
 
@@ -225,9 +297,11 @@ export function ReconciliationPanel(props: ReconciliationPanelProps): ReactEleme
             data-testid="acknowledge-checkbox"
           />
           <span>
-            I have reviewed the reconciliation summary and confirm the conservation invariants hold.
-            I understand this will write {state.pipeline?.batch.activities.length ?? 0} activity
-            draft(s) to the selected account.
+            I have reviewed the reconciliation summary and confirm the conservation invariants hold.{' '}
+            {writeSummary(
+              accountMatch ? accountMatch.counts.new : totalActivities,
+              alreadyInAccount,
+            )}
           </span>
         </label>
       </section>
@@ -276,6 +350,108 @@ function Stat({ label, value, ok }: { label: string; value: number; ok?: boolean
     <div className="border border-border rounded px-2 py-1.5">
       <p className="text-xs text-muted-foreground">{label}</p>
       <p className={`font-mono ${isOk ? '' : 'text-destructive'}`}>{value}</p>
+    </div>
+  );
+}
+
+/** "I understand this will write …" completion for the acknowledgement. */
+function writeSummary(toWrite: number, skipped: number): string {
+  const noun = toWrite === 1 ? 'activity' : 'activities';
+  const skip =
+    skipped > 0 ? ` and skip ${skipped} that ${skipped === 1 ? 'is' : 'are'} already there` : '';
+  return `I understand this will write ${toWrite} new ${noun} to the selected account${skip}.`;
+}
+
+/** Resolved-security props for a source identifier, when its mapping is confirmed. */
+function resolvedFor(
+  state: ImportState,
+  sourceKey: string,
+): { resolved?: { symbol: string; exchangeMic?: string } } {
+  const res = state.symbolResolutions[sourceKey];
+  if (res?.status !== 'resolved') return {};
+  return {
+    resolved: {
+      symbol: res.mapping.symbol,
+      ...(res.mapping.exchangeMic ? { exchangeMic: res.mapping.exchangeMic } : {}),
+    },
+  };
+}
+
+/** Unlinked account copies that are the only copy of a statement activity. */
+function unlinkedOnlyMatches(
+  report: ExistingMatchReport,
+  existing: ExistingActivityLike[] | null,
+): ExistingActivityLike[] {
+  const byId = new Map((existing ?? []).map((e) => [e.id, e]));
+  const out: ExistingActivityLike[] = [];
+  for (const m of report.matches) {
+    if (m.kind !== 'existing-unlinked') continue;
+    const e = byId.get(m.existingId);
+    if (e) out.push(e);
+  }
+  return out;
+}
+
+function formatDay(date: string | Date): string {
+  const d = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(d.getTime()) ? '—' : d.toISOString().slice(0, 10);
+}
+
+function AccountActivityList({
+  testId,
+  title,
+  explanation,
+  activities,
+}: {
+  testId: string;
+  title: string;
+  explanation: string;
+  activities: ExistingActivityLike[];
+}): ReactElement {
+  return (
+    <div
+      className="rounded-md border border-warning/50 bg-warning/10 p-3 text-sm space-y-2"
+      data-testid={testId}
+    >
+      <p className="font-medium">{title}</p>
+      <p className="text-muted-foreground text-xs">{explanation}</p>
+      <div className="border border-border rounded-md overflow-auto max-h-64 bg-background">
+        <table className="w-full text-xs">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left px-2 py-1 font-medium">Date</th>
+              <th className="text-left px-2 py-1 font-medium">Type</th>
+              <th className="text-left px-2 py-1 font-medium">Security in Wealthfolio</th>
+              <th className="text-right px-2 py-1 font-medium">Quantity</th>
+              <th className="text-right px-2 py-1 font-medium">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {activities.map((e) => (
+              <tr key={e.id} className="border-t border-border">
+                <td className="px-2 py-1 font-mono">{formatDay(e.date)}</td>
+                <td className="px-2 py-1">{e.activityType}</td>
+                <td className="px-2 py-1">
+                  {e.assetSymbol ? (
+                    <span className="font-mono">
+                      {e.assetSymbol}
+                      {e.assetName ? (
+                        <span className="text-muted-foreground font-sans"> · {e.assetName}</span>
+                      ) : null}
+                    </span>
+                  ) : (
+                    <span className="text-destructive">none</span>
+                  )}
+                </td>
+                <td className="px-2 py-1 text-right font-mono">{e.quantity ?? '—'}</td>
+                <td className="px-2 py-1 text-right font-mono">
+                  {e.amount ?? '—'} {e.currency}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
