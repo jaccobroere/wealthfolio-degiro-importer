@@ -11,7 +11,12 @@ This addon targets Wealthfolio 3.6.1 and the 3.6.x addon SDK contract.
 - activity lookup and import checks for duplicate safety;
 - account-scoped import mapping persistence;
 - market-data search for user-reviewed instrument identities;
-- bulk activity writes after validation and reconciliation.
+- reviewed activity import through `activities.import` after validation and
+  reconciliation;
+- bulk activity writes (`activities.saveMany`) only to create a security the
+  host does not know yet: the 3.6.1 import endpoint stores such activities
+  without a security, so one activity per new security is written through the
+  bulk path, which creates the asset.
 
 The manifest declares these permissions and the purpose of each one. The 3.6.1
 host builds add-on navigation at runtime, so this addon calls

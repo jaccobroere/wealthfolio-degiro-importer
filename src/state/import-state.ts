@@ -16,7 +16,13 @@
  * provenance (source row numbers, reason codes, normalized decimal strings).
  */
 
+import type { ActivityDraft } from '../domain/activity-draft';
 import type { BatchOutcome } from '../domain/import-outcome';
+import {
+  matchExistingActivities,
+  type ExistingActivityLike,
+  type ExistingMatchReport,
+} from '../duplicates/existing-match';
 import type { RowOverride, RowOverrides } from '../domain/row-override';
 import type { PipelineResultWithFingerprints } from '../parser/parse-and-map';
 
@@ -116,6 +122,12 @@ export interface ImportResultSummary {
   attempted: number;
   created: number;
   skippedDuplicates: number;
+  /** Of `skippedDuplicates`: rows matched to an activity already on the account. */
+  alreadyInAccount?: number;
+  /** Of `alreadyInAccount`: matched copies with no security linked. */
+  alreadyInAccountUnlinked?: number;
+  /** Securities created in Wealthfolio for this import. */
+  assetsCreated?: number;
   blocked: number;
   failed: number;
   failures: readonly { sourceRowNumbers?: readonly number[]; message: string }[];
@@ -146,6 +158,8 @@ export interface ImportState {
   instrumentSymbols: string[];
   /** Fingerprints already imported on the selected account (duplicate index). */
   importedFingerprints: Set<string>;
+  /** Activities already on the selected account, or null until loaded. */
+  existingActivities: ExistingActivityLike[] | null;
   /** Review filter toggles. */
   filters: ReviewFilters;
   /** Reviewer per-row ignore/edit decisions, keyed by source row number. */
@@ -184,6 +198,7 @@ export function initialImportState(): ImportState {
     symbolResolutions: {},
     instrumentSymbols: [],
     importedFingerprints: new Set(),
+    existingActivities: null,
     filters: { ...DEFAULT_FILTERS },
     overrides: {},
     overridesVersion: 0,
@@ -202,7 +217,11 @@ export type ImportAction =
   | { type: 'RESET_UPLOAD' }
   | { type: 'ACCOUNTS_LOADED'; accounts: { id: string; name: string; currency: string }[] }
   | { type: 'SELECT_ACCOUNT'; accountId: string }
-  | { type: 'DUPLICATE_INDEX_LOADED'; fingerprints: Set<string> }
+  | {
+      type: 'DUPLICATE_INDEX_LOADED';
+      fingerprints: Set<string>;
+      existing?: ExistingActivityLike[];
+    }
   | { type: 'SYMBOL_RESOLUTIONS'; resolutions: Record<string, SymbolResolution> }
   | { type: 'RESOLVE_SYMBOL'; sourceTickerOrIsin: string; resolution: SymbolResolution }
   | { type: 'GOTO_STEP'; step: WizardStep }
@@ -250,10 +269,59 @@ export function computeUploadSummary(pipeline: PipelineResultWithFingerprints): 
 export function extractInstrumentSymbols(batch: BatchOutcome): string[] {
   const set = new Set<string>();
   for (const a of batch.activities) {
-    const key = a.isin ?? (a.symbol.startsWith('$CASH-') ? undefined : a.symbol);
+    const key = sourceKeyOf(a);
     if (key) set.add(key);
   }
   return Array.from(set).sort();
+}
+
+/** Source identifier used for symbol resolution (ISIN, else instrument symbol). */
+function sourceKeyOf(a: ActivityDraft): string | undefined {
+  return a.isin ?? (a.symbol.startsWith('$CASH-') ? undefined : a.symbol);
+}
+
+/** How a draft's security will appear in Wealthfolio, when it is known. */
+export interface ResolvedSecurity {
+  /** Reviewed canonical symbol, e.g. `IWDA`. */
+  symbol: string;
+  exchangeMic?: string;
+}
+
+/** The reviewed security for an instrument draft, if its mapping is resolved. */
+export function resolvedSecurityFor(
+  a: ActivityDraft,
+  symbolResolutions: Record<string, SymbolResolution>,
+): ResolvedSecurity | undefined {
+  const key = sourceKeyOf(a);
+  const res = key ? symbolResolutions[key] : undefined;
+  if (res?.status !== 'resolved') return undefined;
+  return {
+    symbol: res.mapping.symbol,
+    ...(res.mapping.exchangeMic ? { exchangeMic: res.mapping.exchangeMic } : {}),
+  };
+}
+
+/**
+ * Match the batch against the activities already on the selected account.
+ * Returns null until both a pipeline and the account's activities are loaded.
+ * The import flow re-runs the same match against a fresh read before writing.
+ */
+export function computeAccountMatch(state: ImportState): ExistingMatchReport | null {
+  if (!state.pipeline || !state.existingActivities) return null;
+  const drafts = state.pipeline.batch.activities.map((a) => {
+    const instrument = !a.symbol.startsWith('$CASH-');
+    const security = instrument ? resolvedSecurityFor(a, state.symbolResolutions) : undefined;
+    return {
+      activityType: a.activityType,
+      date: a.date,
+      quantity: a.quantity,
+      unitPrice: a.unitPrice,
+      amount: a.amount,
+      currency: a.currency,
+      ...(instrument ? { assetSymbol: security?.symbol ?? a.symbol } : {}),
+    };
+  });
+  return matchExistingActivities(drafts, state.existingActivities);
 }
 
 /**
@@ -261,7 +329,8 @@ export function extractInstrumentSymbols(batch: BatchOutcome): string[] {
  *
  * Categories:
  * - `new-valid`       — valid activity, not a duplicate.
- * - `duplicate`        — fingerprint matches an already-imported activity.
+ * - `duplicate`        — already on the account (legacy fingerprint or a
+ *                        content match against the account's activities).
  * - `known-skip`       — (outcomes only) allow-listed broker bookkeeping.
  * - `warning`          — valid activity but carries warnings.
  * - `requires-review`  — unsupported / needs manual review (blocks import).
@@ -288,6 +357,12 @@ export interface ReviewRow {
   symbol: string | null;
   /** Normalized ISIN, if present. */
   isin?: string;
+  /** Product name from the statement, if present. */
+  symbolName?: string;
+  /** Reviewed Wealthfolio security for instrument rows, once resolved. */
+  resolved?: ResolvedSecurity;
+  /** Set when this activity is already on the account and will be skipped. */
+  alreadyInAccount?: 'linked' | 'unlinked';
   /** Normalized currency. */
   currency: string | null;
   /** Normalized quantity (decimal string), or null. */
@@ -354,6 +429,7 @@ export function buildReviewRows(state: ImportState): ReviewRow[] {
   const { pipeline, importedFingerprints, symbolResolutions, overrides } = state;
   if (!pipeline) return [];
   const { batch, fingerprints } = pipeline;
+  const accountMatch = computeAccountMatch(state);
 
   const rows: ReviewRow[] = [];
   // Map activityIndex → review row index (for group-member folding).
@@ -363,8 +439,15 @@ export function buildReviewRows(state: ImportState): ReviewRow[] {
   for (let i = 0; i < batch.activities.length; i++) {
     const a = batch.activities[i];
     const fp = fingerprints.get(i);
-    const isDuplicate = fp ? importedFingerprints.has(fp) : false;
-    const sourceKey = a.isin ?? (a.symbol.startsWith('$CASH-') ? undefined : a.symbol);
+    const match = accountMatch?.matches[i];
+    const inAccount =
+      match?.kind === 'existing'
+        ? 'linked'
+        : match?.kind === 'existing-unlinked'
+          ? 'unlinked'
+          : undefined;
+    const isDuplicate = (fp ? importedFingerprints.has(fp) : false) || inAccount !== undefined;
+    const sourceKey = sourceKeyOf(a);
     const resolution = sourceKey ? symbolResolutions[sourceKey] : undefined;
     const unresolved = !!sourceKey && resolution?.status !== 'resolved';
     const hasWarnings = Object.keys(a.warnings).length > 0;
@@ -391,6 +474,18 @@ export function buildReviewRows(state: ImportState): ReviewRow[] {
       activityType: a.activityType,
       symbol: a.symbol,
       ...(a.isin ? { isin: a.isin } : {}),
+      ...(a.symbolName ? { symbolName: a.symbolName } : {}),
+      ...(resolution?.status === 'resolved'
+        ? {
+            resolved: {
+              symbol: resolution.mapping.symbol,
+              ...(resolution.mapping.exchangeMic
+                ? { exchangeMic: resolution.mapping.exchangeMic }
+                : {}),
+            },
+          }
+        : {}),
+      ...(inAccount ? { alreadyInAccount: inAccount } : {}),
       currency: a.currency,
       quantity: a.quantity || null,
       amount: a.amount || null,
@@ -656,10 +751,15 @@ export function importReducer(state: ImportState, action: ImportAction): ImportS
         accountId: action.accountId,
         symbolResolutions: {},
         importedFingerprints: new Set(),
+        existingActivities: null,
         acknowledged: false,
       };
     case 'DUPLICATE_INDEX_LOADED':
-      return { ...state, importedFingerprints: action.fingerprints };
+      return {
+        ...state,
+        importedFingerprints: action.fingerprints,
+        existingActivities: action.existing ?? state.existingActivities,
+      };
     case 'SYMBOL_RESOLUTIONS':
       return { ...state, symbolResolutions: { ...action.resolutions } };
     case 'RESOLVE_SYMBOL':

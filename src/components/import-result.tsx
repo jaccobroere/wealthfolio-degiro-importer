@@ -80,7 +80,22 @@ export function ImportResult({
         <Stat label="Created" value={result.created} />
         <Stat label="Skipped duplicates" value={result.skippedDuplicates} />
         <Stat label="Blocked" value={result.blocked} />
+        {result.alreadyInAccount !== undefined ? (
+          <Stat label="Already in account" value={result.alreadyInAccount} />
+        ) : null}
+        {result.assetsCreated ? (
+          <Stat label="Securities created" value={result.assetsCreated} />
+        ) : null}
       </div>
+
+      {result.alreadyInAccountUnlinked ? (
+        <p className="text-sm text-muted-foreground" data-testid="unlinked-note">
+          {result.alreadyInAccountUnlinked} activit
+          {result.alreadyInAccountUnlinked === 1 ? 'y was' : 'ies were'} already in Wealthfolio
+          without a security and {result.alreadyInAccountUnlinked === 1 ? 'was' : 'were'} not added
+          again. The reconcile step lists them so you can repair them.
+        </p>
+      ) : null}
 
       {hasFatal ? (
         <div className="flex items-center gap-2">

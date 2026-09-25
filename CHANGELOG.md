@@ -3,6 +3,29 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## 1.5.0 — 2026-09-25
+
+- Fixed: re-importing a full DEGIRO history added duplicate dividends and
+  trades. Activities are now matched against the destination account on type,
+  day, currency and value before writing, independent of source row numbers
+  and of whether the security existed at the earlier import.
+- Fixed: activities for a security Wealthfolio did not know yet were stored
+  without a security (Wealthfolio 3.6.1's import endpoint never creates
+  assets). The importer now seeds the security through `activities.saveMany`
+  and links the remaining activities to it; it never imports an instrument
+  activity without its security. Adds the `activities.saveMany` permission.
+- Fixed: repeated identical same-day activities (e.g. three equal dividend
+  credits) were collapsed into one by Wealthfolio's import duplicate key. The
+  2nd and later copies now carry a numbered comment and are all imported.
+- Fixed: the activity that seeds a new security no longer passes DEGIRO's
+  trade-currency-per-EUR rate as Wealthfolio's `fxRate`, which booked foreign
+  trades' cash in EUR at the inverse rate.
+- Added: an _Already in Wealthfolio_ section in the reconcile step with new /
+  already-present counts and lists of extra copies and unlinked activities
+  already on the account.
+- Changed: review and reconcile show the mapped ticker and exchange, with the
+  product name and ISIN, instead of the ISIN alone.
+
 ## 1.4.0 — 2026-09-15
 
 - Added: fix problem rows in the review step instead of editing the CSV. Any

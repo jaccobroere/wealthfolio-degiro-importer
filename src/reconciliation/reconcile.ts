@@ -19,6 +19,8 @@ export interface QuantityPosition {
   key: string;
   isin?: string;
   symbol: string;
+  /** Product name from the statement, when present. */
+  symbolName?: string;
   /** BUY positive, SELL negative. */
   netQuantity: string;
   tradeActivityCount: number;
@@ -68,6 +70,7 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
     key: string;
     isin?: string;
     symbol: string;
+    symbolName?: string;
     net: Decimal;
     tradeActivityCount: number;
   }
@@ -98,11 +101,13 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
       if (existing) {
         existing.net = existing.net.plus(signed);
         existing.tradeActivityCount += 1;
+        existing.symbolName ??= a.symbolName;
       } else {
         positionsMap.set(key, {
           key,
           ...(a.isin ? { isin: a.isin } : {}),
           symbol: a.symbol,
+          ...(a.symbolName ? { symbolName: a.symbolName } : {}),
           net: signed,
           tradeActivityCount: 1,
         });
@@ -154,6 +159,7 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
       key: p.key,
       ...(p.isin ? { isin: p.isin } : {}),
       symbol: p.symbol,
+      ...(p.symbolName ? { symbolName: p.symbolName } : {}),
       netQuantity: p.net.toString(),
       tradeActivityCount: p.tradeActivityCount,
     })),
