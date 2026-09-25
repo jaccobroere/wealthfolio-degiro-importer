@@ -50,6 +50,22 @@ export interface FakeHostOptions {
   /** When set, `saveMany` returns this many `errors` entries (simulating a
    * partial failure for the first N creates). */
   saveManyErrorCount?: number;
+  /** Securities that already exist in Wealthfolio, keyed `SYMBOL@MIC`. */
+  assets?: FakeAsset[];
+}
+
+/** A security known to the fake host. */
+export interface FakeAsset {
+  id: string;
+  symbol: string;
+  exchangeMic?: string;
+  name?: string;
+}
+
+/** Host asset lookup key (`SYMBOL@MIC`, or `SYMBOL` without a MIC). */
+function assetKey(symbol: string, exchangeMic?: string | null): string {
+  const s = symbol.trim().toUpperCase();
+  return exchangeMic ? `${s}@${exchangeMic}` : s;
 }
 
 export interface RecordedSaveMany {
@@ -71,10 +87,12 @@ export interface FakeHost {
   storedActivities: ActivityDetails[];
   /** The last mapping passed to `saveImportMapping`. */
   savedMapping: ImportMappingData | undefined;
+  /** Securities currently known to the host. */
+  assets: FakeAsset[];
 }
 
 /** Build a minimal `ActivityDetails` from a created `Activity`. */
-function toDetails(activity: Activity): ActivityDetails {
+function toDetails(activity: Activity, asset?: FakeAsset): ActivityDetails {
   return {
     id: activity.id,
     activityType: activity.activityType as ActivityDetails['activityType'],
@@ -88,10 +106,13 @@ function toDetails(activity: Activity): ActivityDetails {
     accountId: activity.accountId,
     accountName: 'fake',
     accountCurrency: 'EUR',
-    assetSymbol: 'FAKE',
+    // Like the host, an activity without a linked asset has an empty symbol.
+    assetSymbol: asset?.symbol ?? '',
+    ...(asset?.name ? { assetName: asset.name } : {}),
+    ...(asset?.exchangeMic ? { exchangeMic: asset.exchangeMic } : {}),
     createdAt: new Date(activity.createdAt),
     updatedAt: new Date(activity.updatedAt),
-    assetId: activity.assetId ?? 'asset-1',
+    assetId: asset?.id ?? '',
     metadata: activity.metadata as Record<string, unknown> | undefined,
   };
 }
@@ -124,6 +145,12 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
   const importCalls: ActivityImport[][] = [];
   const checkImportCalls: ActivityImport[][] = [];
   const importedKeys = new Set<string>();
+  const assets: FakeAsset[] = [...(options.assets ?? [])];
+  const findAsset = (symbol: string, exchangeMic?: string | null) =>
+    assets.find((a) => assetKey(a.symbol, a.exchangeMic) === assetKey(symbol, exchangeMic));
+  const findAssetById = (id: string | undefined) =>
+    id ? assets.find((a) => a.id === id) : undefined;
+  let assetCounter = 1;
   let savedMapping: ImportMappingData | undefined;
   let idCounter = 1000;
 
@@ -152,6 +179,34 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           errors.push({ id: c.id, action: 'create', message: 'simulated failure' });
           continue;
         }
+        // Like `prepare_activities_for_save`, the bulk path creates a missing
+        // security from the asset resolution input.
+        let asset = findAssetById(c.asset?.id);
+        if (!asset && c.asset?.symbol) {
+          asset = findAsset(c.asset.symbol, c.asset.exchangeMic);
+          if (!asset) {
+            asset = {
+              id: `asset-uuid-${assetCounter++}`,
+              symbol: c.asset.symbol,
+              ...(c.asset.exchangeMic ? { exchangeMic: c.asset.exchangeMic } : {}),
+              ...(c.asset.name ? { name: c.asset.name } : {}),
+            };
+            assets.push(asset);
+          }
+        }
+        importedKeys.add(
+          hostKey({
+            accountId: c.accountId,
+            activityType: c.activityType,
+            date: c.activityDate,
+            assetRef: asset?.id,
+            quantity: c.quantity,
+            unitPrice: c.unitPrice,
+            amount: c.amount,
+            currency: c.currency,
+            comment: c.comment,
+          }),
+        );
         const id = `act-${idCounter++}`;
         const now = new Date().toISOString();
         const activity: Activity = {
@@ -173,7 +228,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           updatedAt: now,
         };
         created.push(activity);
-        storedActivities.push(toDetails(activity));
+        storedActivities.push(toDetails(activity, asset));
       }
       return { created, updated: [], deleted: [], createdMappings: [], errors };
     },
@@ -210,16 +265,23 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
         };
       }
       const activities = imports.map((activity) => {
-        const key = [
-          activity.accountId,
-          activity.activityType,
-          activity.date,
-          activity.symbol,
-          activity.quantity,
-          activity.unitPrice,
-          activity.amount,
-          activity.currency,
-        ].join('|');
+        // Mirrors `build_import_idempotency_key`: the asset reference is the
+        // existing asset id when checkImport found one, else `SYMBOL@MIC`.
+        const symbol = activity.symbol?.trim() ?? '';
+        const assetRef =
+          activity.assetId ??
+          (symbol ? (activity.exchangeMic ? `${symbol}@${activity.exchangeMic}` : symbol) : '');
+        const key = hostKey({
+          accountId: activity.accountId,
+          activityType: activity.activityType,
+          date: activity.date,
+          assetRef,
+          quantity: activity.quantity,
+          unitPrice: activity.unitPrice,
+          amount: activity.amount,
+          currency: activity.currency,
+          comment: activity.comment,
+        });
         if (importedKeys.has(key)) {
           return {
             ...activity,
@@ -249,7 +311,9 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
           createdAt: now,
           updatedAt: now,
         };
-        storedActivities.push(toDetails(created));
+        // The 3.6.1 import endpoint never creates assets: a row without an
+        // `assetId` is stored with no security linked.
+        storedActivities.push(toDetails(created, findAssetById(activity.assetId)));
         return activity;
       });
       const duplicates = activities.filter((activity) => activity.duplicateOfId).length;
@@ -269,8 +333,16 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     checkImport: async (activities: ActivityImport[]): Promise<ActivityImport[]> => {
       checkImportCalls.push(activities);
       if (options.checkImportError) throw options.checkImportError;
-      // Pass-through: mark all as valid (the adapter re-checks isValid).
-      const checked = activities.map((a) => ({ ...a, isValid: a.isValid ?? true }));
+      // Mark all as valid (the adapter re-checks isValid) and, like the host,
+      // attach the id of a security that already exists.
+      const checked = activities.map((a) => {
+        const existing = a.symbol ? findAsset(a.symbol, a.exchangeMic) : undefined;
+        return {
+          ...a,
+          isValid: a.isValid ?? true,
+          ...(existing ? { assetId: existing.id, symbolName: existing.name } : {}),
+        };
+      });
       return options.checkImportTransform?.(checked) ?? checked;
     },
     getImportMapping: async (
@@ -338,10 +410,39 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
     importCalls,
     checkImportCalls,
     storedActivities,
+    assets,
     get savedMapping() {
       return savedMapping;
     },
   };
+}
+
+/** Host-like duplicate key: day-level date, asset reference, economics, comment. */
+function hostKey(k: {
+  accountId?: string;
+  activityType?: string;
+  date?: string | Date;
+  assetRef?: string;
+  quantity?: unknown;
+  unitPrice?: unknown;
+  amount?: unknown;
+  currency?: string;
+  comment?: string | null;
+}): string {
+  const d = k.date instanceof Date ? k.date : new Date(k.date ?? '');
+  const day = Number.isNaN(d.getTime()) ? String(k.date) : d.toISOString().slice(0, 10);
+  const num = (v: unknown) => (v === undefined || v === null || v === '' ? '' : String(Number(v)));
+  return [
+    k.accountId,
+    k.activityType,
+    day,
+    k.assetRef ?? '',
+    num(k.quantity),
+    num(k.unitPrice),
+    num(k.amount),
+    k.currency,
+    (k.comment ?? '').trim(),
+  ].join('|');
 }
 
 /** Build a seeded `ActivityDetails` with this importer's metadata. */

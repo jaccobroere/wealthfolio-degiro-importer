@@ -15,6 +15,14 @@ import { runImport } from '../../src/wealthfolio/import';
 import { buildDuplicateIndex } from '../../src/wealthfolio/duplicate-index';
 import { createFakeHost, foreignSeededActivity, seededActivity } from './fake-host';
 
+/** A security that already exists in Wealthfolio. */
+const AAPL = { id: 'asset-aapl', symbol: 'AAPL', name: 'Apple Inc.' };
+
+/** `SYM0..SYMn-1` securities that already exist in Wealthfolio. */
+function symAssets(n: number) {
+  return Array.from({ length: n }, (_, i) => ({ id: `asset-sym-${i}`, symbol: `SYM${i}` }));
+}
+
 /** A minimal valid BUY draft. */
 function buyDraft(opts: Partial<ActivityDraft> = {}): ActivityDraft {
   return {
@@ -58,7 +66,7 @@ function dividendDraft(opts: Partial<ActivityDraft> = {}): ActivityDraft {
 
 describe('DEGIRO adapter: idempotent import flow', () => {
   it('creates all rows on first import and marks their fingerprints imported', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: [AAPL] });
     const drafts = [buyDraft(), dividendDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
@@ -75,26 +83,43 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(host.importCalls[0]?.every((activity) => activity.isDraft === false)).toBe(true);
   });
 
-  it('identical second import delegates duplicate detection to the host import workflow', async () => {
-    const host = createFakeHost();
+  it('identical second import is recognised as already in the account', async () => {
+    const host = createFakeHost({ assets: [AAPL] });
     const drafts = [buyDraft(), dividendDraft()];
 
     // First import.
     await runImport(host.api, 'acct-1', drafts);
     expect(host.importCalls).toHaveLength(1);
 
-    // The host owns duplicate detection for import-API writes.
+    // Every row is matched to the stored copy before anything is submitted.
     const result2 = await runImport(host.api, 'acct-1', drafts);
 
-    expect(result2.attempted).toBe(2);
+    expect(result2.attempted).toBe(0);
     expect(result2.created).toBe(0);
     expect(result2.importedFingerprints).toHaveLength(0);
     expect(result2.skippedDuplicates).toBe(2);
-    expect(host.importCalls).toHaveLength(2);
+    expect(result2.alreadyInAccount).toBe(2);
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.storedActivities).toHaveLength(2);
+  });
+
+  it('still honors host-reported duplicates for rows it could not match', async () => {
+    const host = createFakeHost({ assets: [AAPL] });
+    await runImport(host.api, 'acct-1', [buyDraft()]);
+    // Hide the stored copy from the content matcher; the host still has it.
+    const stored = [...host.storedActivities];
+    host.storedActivities.length = 0;
+
+    const result = await runImport(host.api, 'acct-1', [buyDraft()]);
+
+    expect(result.attempted).toBe(1);
+    expect(result.created).toBe(0);
+    expect(result.skippedDuplicates).toBe(1);
+    host.storedActivities.push(...stored);
   });
 
   it('overlapping import creates only new rows', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: [AAPL] });
     const firstDrafts = [buyDraft(), dividendDraft()];
     await runImport(host.api, 'acct-1', firstDrafts);
     expect(host.importCalls).toHaveLength(1);
@@ -114,19 +139,20 @@ describe('DEGIRO adapter: idempotent import flow', () => {
       errors: {},
       warnings: {},
     };
-    const overlap = [buyDraft(), feeDraft];
+    const overlap = [buyDraft({ sourceRowNumbers: [7] }), feeDraft];
     const result2 = await runImport(host.api, 'acct-1', overlap);
 
-    expect(result2.attempted).toBe(2);
+    expect(result2.attempted).toBe(1);
     expect(result2.created).toBe(1);
     expect(result2.skippedDuplicates).toBe(1);
+    expect(result2.alreadyInAccount).toBe(1);
     expect(result2.importedFingerprints).toHaveLength(1);
     expect(host.importCalls).toHaveLength(2);
-    expect(host.importCalls[1]).toHaveLength(2);
+    expect(host.importCalls[1]).toHaveLength(1);
   });
 
   it('failed import never marks failed fingerprints as imported', async () => {
-    const host = createFakeHost({ importError: new Error('host down') });
+    const host = createFakeHost({ assets: [AAPL], importError: new Error('host down') });
     const drafts = [buyDraft(), dividendDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
@@ -143,7 +169,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   });
 
   it('import-time validation failure returns safe diagnostics without a partial write', async () => {
-    const host = createFakeHost({ importValidationErrorCount: 1 });
+    const host = createFakeHost({ assets: [AAPL], importValidationErrorCount: 1 });
     const drafts = [buyDraft(), dividendDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
@@ -170,6 +196,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
 
   it('submits the complete checked asset resolution through the import API', async () => {
     const host = createFakeHost({
+      assets: [AAPL],
       checkImportTransform: (activities) =>
         activities.map((activity) => ({
           ...activity,
@@ -199,7 +226,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   });
 
   it('uses the reviewed canonical symbol in the checkImport request', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: [AAPL] });
 
     await runImport(host.api, 'acct-1', [buyDraft()], async () => ({
       symbol: 'AAPL',
@@ -212,7 +239,10 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   });
 
   it('fatal checkImport error returns to review and keeps Import disabled', async () => {
-    const host = createFakeHost({ checkImportError: new Error('host validation fatal') });
+    const host = createFakeHost({
+      assets: [AAPL],
+      checkImportError: new Error('host validation fatal'),
+    });
     const drafts = [buyDraft()];
 
     const result = await runImport(host.api, 'acct-1', drafts);
@@ -231,7 +261,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     // as a duplicate.
     const foreignFp = 'foreign-fingerprint-aaaa';
     const foreign = foreignSeededActivity('acct-1', foreignFp, 'revolut-importer');
-    const host = createFakeHost({ activities: [foreign] });
+    const host = createFakeHost({ assets: [AAPL], activities: [foreign] });
 
     // Our draft's fingerprint will differ from the foreign one, but even if
     // we seed a DEGIRO-owned activity with the SAME fingerprint, the foreign
@@ -257,22 +287,22 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(indexOnlyTheirs.importedFingerprints.has(fp)).toBe(false);
   });
 
-  it('uses activities.import and never calls the low-level bulk editor endpoint', async () => {
-    const host = createFakeHost();
+  it('uses activities.import and not the bulk editor endpoint for known securities', async () => {
+    const host = createFakeHost({ assets: [AAPL] });
     await runImport(host.api, 'acct-1', [buyDraft()]);
     expect(host.importCalls).toHaveLength(1);
     expect(host.saveManyCalls).toHaveLength(0);
   });
 
   it('does not attach add-on provenance metadata to the host import payload', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: [AAPL] });
     await runImport(host.api, 'acct-1', [buyDraft()]);
 
     expect(host.importCalls[0]?.[0]).not.toHaveProperty('metadata');
   });
 
   it('chunks a 300-row import and imports every row through multiple host calls', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: symAssets(300) });
     const drafts: ActivityDraft[] = Array.from({ length: 300 }, (_, i) =>
       buyDraft({
         sourceRowNumbers: [i + 1],
@@ -298,7 +328,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   });
 
   it('survives a host payload-size cap by chunking the import', async () => {
-    const host = createFakeHost({ importBatchSizeLimit: 200 });
+    const host = createFakeHost({ assets: symAssets(500), importBatchSizeLimit: 200 });
     const drafts: ActivityDraft[] = Array.from({ length: 500 }, (_, i) =>
       buyDraft({
         sourceRowNumbers: [i + 1],
@@ -319,7 +349,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   });
 
   it('excludes already-imported fingerprints from later chunks across re-attempts', async () => {
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: symAssets(300) });
     const drafts: ActivityDraft[] = Array.from({ length: 250 }, (_, i) =>
       buyDraft({
         sourceRowNumbers: [i + 1],
@@ -345,7 +375,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
   it('a failed chunk produces per-row failures without a fatal when other chunks succeed', async () => {
     // Host that fails the 2nd call only.
     let callIndex = 0;
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: symAssets(300) });
     const originalImport = host.api.activities.import as unknown as (
       activities: ActivityImport[],
     ) => Promise<unknown>;
@@ -386,7 +416,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     // on the host's `activities.import` method (not the rewritten
     // `activities.globalThis.__wealthfolioImport` the rewriter would have
     // produced).
-    const host = createFakeHost();
+    const host = createFakeHost({ assets: [AAPL] });
 
     const cashDeposit: ActivityDraft = {
       date: '2026-01-02T09:00:00+01:00',
@@ -507,5 +537,165 @@ describe('DEGIRO adapter: idempotent import flow', () => {
 
     expect(seen).toEqual(['called']);
     expect(result.importRunId).toBe('run-1');
+  });
+});
+
+describe('DEGIRO adapter: re-importing a full history', () => {
+  const ndia = (opts: Partial<ActivityDraft> = {}) =>
+    buyDraft({
+      date: '2024-03-11T11:49:00+01:00',
+      isin: 'IE00SYN00001',
+      symbol: 'IE00SYN00001',
+      symbolName: 'SYNTHETIC EMERGING ETF',
+      quantity: '37',
+      unitPrice: '12.40',
+      amount: '458.80',
+      fee: '1',
+      currency: 'EUR',
+      sourceRowNumbers: [10],
+      ...opts,
+    });
+  const ndiaDividend = (opts: Partial<ActivityDraft> = {}) =>
+    dividendDraft({
+      date: '2024-09-30T07:40:00+02:00',
+      isin: 'IE00SYN00001',
+      symbol: 'IE00SYN00001',
+      quantity: '1',
+      unitPrice: '2.84',
+      amount: '2.84',
+      currency: 'EUR',
+      sourceRowNumbers: [5],
+      ...opts,
+    });
+  const resolveNdia = async () => ({
+    symbol: 'SYNA',
+    exchangeMic: 'XAMS',
+    quoteCcy: 'EUR',
+    instrumentType: 'ETF',
+  });
+
+  it('creates a missing security once and links every activity to it', async () => {
+    const host = createFakeHost();
+
+    const result = await runImport(host.api, 'acct-1', [ndia(), ndiaDividend()], resolveNdia);
+
+    expect(result.created).toBe(2);
+    expect(result.assetsCreated).toBe(1);
+    expect(host.assets).toHaveLength(1);
+    // One seed through the bulk path, the rest through the import workflow.
+    expect(host.saveManyCalls).toHaveLength(1);
+    expect(host.saveManyCalls[0]?.request.creates?.[0]?.asset).toMatchObject({
+      symbol: 'SYNA',
+      exchangeMic: 'XAMS',
+    });
+    expect(host.importCalls).toHaveLength(1);
+    expect(host.importCalls[0]?.[0]?.assetId).toBe(host.assets[0]?.id);
+    expect(host.storedActivities.every((a) => a.assetId === host.assets[0]?.id)).toBe(true);
+  });
+
+  it('a later full export with shifted row numbers only adds the new activities', async () => {
+    const host = createFakeHost();
+    await runImport(host.api, 'acct-1', [ndia()], resolveNdia);
+    expect(host.storedActivities).toHaveLength(1);
+
+    // The newer export has a new dividend on top, which shifts every row.
+    const later = [ndiaDividend({ sourceRowNumbers: [2] }), ndia({ sourceRowNumbers: [11] })];
+    const result = await runImport(host.api, 'acct-1', later, resolveNdia);
+
+    expect(result.created).toBe(1);
+    expect(result.alreadyInAccount).toBe(1);
+    expect(host.storedActivities).toHaveLength(2);
+    expect(host.storedActivities.every((a) => a.assetSymbol === 'SYNA')).toBe(true);
+  });
+
+  it('does not re-add activities an earlier version stored without a security', async () => {
+    // The pre-fix state: the security now exists, but the earlier copies of
+    // these activities were stored unlinked.
+    const orphan = (id: string, draft: ActivityDraft) =>
+      seededActivity('acct-1', `legacy-${id}`, {
+        id,
+        activityType: draft.activityType,
+        date: new Date(draft.date),
+        quantity: draft.activityType === 'DIVIDEND' ? null : draft.quantity,
+        unitPrice: draft.activityType === 'DIVIDEND' ? null : draft.unitPrice,
+        amount: draft.amount,
+        currency: draft.currency,
+        assetSymbol: '',
+        assetId: '',
+        metadata: undefined,
+      });
+    const host = createFakeHost({
+      assets: [{ id: 'asset-ndia', symbol: 'SYNA', exchangeMic: 'XAMS' }],
+      activities: [orphan('o1', ndia()), orphan('o2', ndiaDividend())],
+    });
+
+    const result = await runImport(host.api, 'acct-1', [ndia(), ndiaDividend()], resolveNdia);
+
+    expect(result.created).toBe(0);
+    expect(result.alreadyInAccount).toBe(2);
+    expect(result.alreadyInAccountUnlinked).toBe(2);
+    expect(host.importCalls).toHaveLength(0);
+    expect(host.storedActivities).toHaveLength(2);
+  });
+
+  it('never stores an activity without its security when the security cannot be created', async () => {
+    const host = createFakeHost({ saveManyError: new Error('asset rejected') });
+
+    const result = await runImport(host.api, 'acct-1', [ndia(), ndiaDividend()], resolveNdia);
+
+    expect(result.created).toBe(0);
+    expect(result.failedFingerprints).toHaveLength(2);
+    expect(result.failures.map((f) => f.message)).toEqual([
+      'Wealthfolio could not create this security. Re-select its mapping.',
+      'Wealthfolio could not create this security. Re-select its mapping.',
+    ]);
+    expect(host.importCalls).toHaveLength(0);
+    expect(host.storedActivities).toHaveLength(0);
+  });
+});
+
+describe('DEGIRO adapter: repeated identical activities', () => {
+  it('imports every copy instead of letting the host collapse them', async () => {
+    const host = createFakeHost({ assets: [AAPL] });
+    const copies = [1, 2, 3].map((n) =>
+      dividendDraft({ date: `2024-02-15T0${n}:00:00+01:00`, sourceRowNumbers: [n] }),
+    );
+
+    const result = await runImport(host.api, 'acct-1', copies);
+
+    expect(result.created).toBe(3);
+    expect(host.storedActivities).toHaveLength(3);
+    expect(host.importCalls[0]?.map((a) => a.comment)).toEqual([undefined, '#2', '#3']);
+
+    // Re-importing the same statement adds nothing.
+    const again = await runImport(host.api, 'acct-1', copies);
+    expect(again.created).toBe(0);
+    expect(again.alreadyInAccount).toBe(3);
+  });
+});
+
+describe('DEGIRO adapter: seeded activities', () => {
+  it('does not pass DEGIRO’s trade-currency-per-EUR rate as the host fxRate', async () => {
+    const host = createFakeHost();
+    const usdBuy = buyDraft({
+      group: {
+        orderId: 'ord-1',
+        tradeSourceRowNumbers: [42],
+        feeSourceRowNumbers: [],
+        fxRate: '1.15',
+        fillCount: 1,
+      },
+    });
+
+    await runImport(host.api, 'acct-1', [usdBuy], async () => ({
+      symbol: 'AAPL',
+      exchangeMic: 'XNAS',
+      quoteCcy: 'USD',
+      instrumentType: 'EQUITY',
+    }));
+
+    const seed = host.saveManyCalls[0]?.request.creates?.[0];
+    expect(seed?.currency).toBe('USD');
+    expect(seed?.fxRate).toBeUndefined();
   });
 });

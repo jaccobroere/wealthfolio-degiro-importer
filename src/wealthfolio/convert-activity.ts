@@ -151,7 +151,11 @@ export function toActivityCreate(
     fee: checked.fee ?? undefined,
     tax: checked.tax ?? undefined,
     comment: checked.comment ?? undefined,
-    fxRate: checked.fxRate ?? draft.group?.fxRate ?? undefined,
+    // Only a host-supplied rate. DEGIRO's group rate is quoted as trade
+    // currency per EUR; Wealthfolio reads `fxRate` the other way round and
+    // would move the trade's cash into the account currency at the inverse
+    // rate. The import path sends no rate either, so both paths agree.
+    fxRate: checked.fxRate ?? undefined,
     // The SDK permits an object for convenience, but the 3.6.1 host bulk
     // endpoint's wire DTO requires metadata to be a JSON string.
     metadata: JSON.stringify(meta),

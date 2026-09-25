@@ -115,6 +115,12 @@ export interface ImportFlowResult {
   failedFingerprints: string[];
   /** Rows skipped as exact duplicates of already-imported activities. */
   skippedDuplicates: number;
+  /** Of `skippedDuplicates`: rows matched on content to an account activity. */
+  alreadyInAccount: number;
+  /** Of `alreadyInAccount`: matched copies that have no security linked. */
+  alreadyInAccountUnlinked: number;
+  /** Securities created in Wealthfolio by seeding one of their rows. */
+  assetsCreated: number;
   /** Rows blocked from import (host validation errors or unresolved symbols). */
   blocked: number;
   /** Sanitized validation/persistence errors correlated to source rows. */
