@@ -3,6 +3,20 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## 1.6.0 — 2026-09-26
+
+- Changed: security search is broad (ISIN/ticker, related tickers and names)
+  and listings are ranked by instrument, then traded currency, then preferred
+  exchanges. "Accept suggested listings" replaces the single-result bulk
+  action and only takes a same-instrument listing in the traded currency that
+  is strictly first on exchange preference.
+- Added: a free-text search per security, richer result details (exchange,
+  MIC, currency, name), and changing a confirmed mapping.
+- Added: preferred exchanges, editable and saved per account.
+- Added: "Forget remembered mappings" for the selected account.
+- Fixed: remembered euro listings were reported as stale because they were
+  re-verified against a search that only returns the primary listing.
+
 ## 1.5.1 — 2026-09-25
 
 - Fixed: same-day repeats of cash-type activities (e.g. equal dividend tax on

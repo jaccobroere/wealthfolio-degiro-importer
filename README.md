@@ -39,8 +39,10 @@ See the complete [installation guide](docs/INSTALL.md).
 
 1. Export an **Account statement** CSV from DEGIRO.
 2. Select the file and the Wealthfolio account that should receive the data.
-3. Review every detected instrument and confirm ticker/exchange mappings. You may accept all
-   single-result matches; ambiguous or missing results still require review.
+3. Review every detected instrument and confirm the listing you hold. Listings are ranked by
+   instrument, then the currency you traded in, then your preferred exchanges (editable, saved
+   per account). You can search any other ticker or name per instrument, and accept all
+   suggested listings in one click; anything without a clear suggestion stays for review.
 4. Inspect validation messages and the reconciliation summary.
 5. Import only after the review is complete.
 
@@ -50,6 +52,8 @@ fingerprints and import checks. If Wealthfolio rejects a draft, the importer
 shows safe row-level diagnostics without exposing statement data.
 When a remembered mapping no longer matches Wealthfolio's current search,
 the mapping step shows that status and lets you remove it or select a replacement.
+"Forget remembered mappings" clears every mapping this importer saved for the
+selected account.
 
 ## What is supported
 
