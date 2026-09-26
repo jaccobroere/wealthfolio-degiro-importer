@@ -324,6 +324,38 @@ export function computeAccountMatch(state: ImportState): ExistingMatchReport | n
   return matchExistingActivities(drafts, state.existingActivities);
 }
 
+/** What the statement says about one security, for listing choice. */
+export interface SecurityContext {
+  /** Product name from the statement. */
+  name?: string;
+  /** Currency of its buys/sells (most frequent), else of any activity. */
+  tradedCurrency?: string;
+}
+
+/** Statement context per instrument source key (ISIN or product). */
+export function securityContexts(batch: BatchOutcome): Record<string, SecurityContext> {
+  const tallies = new Map<string, { name?: string; trade: Map<string, number>; any: string }>();
+  for (const a of batch.activities) {
+    const key = sourceKeyOf(a);
+    if (!key) continue;
+    const t = tallies.get(key) ?? { trade: new Map<string, number>(), any: a.currency };
+    t.name ??= a.symbolName;
+    if (a.activityType === 'BUY' || a.activityType === 'SELL') {
+      t.trade.set(a.currency, (t.trade.get(a.currency) ?? 0) + 1);
+    }
+    tallies.set(key, t);
+  }
+  const out: Record<string, SecurityContext> = {};
+  for (const [key, t] of tallies) {
+    const top = [...t.trade].sort((x, y) => y[1] - x[1])[0]?.[0];
+    out[key] = {
+      ...(t.name ? { name: t.name } : {}),
+      tradedCurrency: top ?? t.any,
+    };
+  }
+  return out;
+}
+
 /**
  * Categorize a single activity draft into a review category.
  *

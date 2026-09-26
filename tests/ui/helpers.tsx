@@ -280,8 +280,13 @@ function symbolSearchResult(input: {
   exchangeName: string;
   exchangeMic?: string;
   providerId?: string;
+  currency?: string;
+  longName?: string;
 }): SymbolSearchResult {
   return {
+    currency: input.currency ?? 'EUR',
+    longName: input.longName ?? `${input.symbol} synthetic fund`,
+    shortName: input.longName ?? `${input.symbol} synthetic fund`,
     symbol: input.symbol,
     canonicalSymbol: input.symbol,
     exchange: input.exchangeName,

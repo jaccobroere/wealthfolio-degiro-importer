@@ -1,10 +1,12 @@
 /**
  * Mapping step.
  *
- * Selects the destination account and confirms every unseen security via
- * `ctx.api['market-data'].searchTicker(query)`. It can accept an explicitly
- * requested batch of single-result searches, but NEVER selects the first of
- * multiple results. Reuses exact saved mappings via
+ * Selects the destination account and confirms every unseen security. Search
+ * results are ranked by `listing-choice.ts` (same instrument → traded
+ * currency → preferred exchanges); the reviewer can run a free-text search
+ * per security and pick any listing. The explicit "accept suggested" action
+ * takes only a listing that is the same instrument, in the traded currency,
+ * and strictly first on exchange preference — never merely the first result. Reuses exact saved mappings via
  * `ctx.api.activities.getImportMapping(accountId, contextKind)` only after
  * verifying canonical identity (symbol+MIC+provider) matches. Unresolved or
  * ambiguous symbols block progression to review.
@@ -13,10 +15,31 @@
  * current resolutions, and callbacks. The page performs the actual host API
  * calls (searchTicker, getImportMapping) in effects/handlers.
  */
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Button, Badge } from '@wealthfolio/ui';
 import { AlertCircle, CheckCircle2, HelpCircle, Search, Loader2 } from 'lucide-react';
-import type { SymbolResolution, UploadSummary } from '../state/import-state';
+import type { SecurityContext, SymbolResolution, UploadSummary } from '../state/import-state';
+import { parseExchangeList } from '../mapping/listing-choice';
+
+/** One ranked search result, as shown for manual confirmation. */
+export interface RankedResultView {
+  /** Canonical symbol persisted for the asset (e.g. `IWDA`). */
+  symbol: string;
+  /** Provider symbol as searched/displayed (e.g. `IWDA.AS`). */
+  providerSymbolLabel: string;
+  exchange: string;
+  exchangeMic?: string;
+  providerId?: string;
+  quoteCcy?: string;
+  instrumentType?: string;
+  providerSymbol?: string;
+  kind?: string;
+  name?: string;
+  sameInstrument: boolean;
+  currencyMatch: boolean;
+  preferredExchange: boolean;
+  suggested: boolean;
+}
 import { AccountSelect, type AccountOption } from './account-select';
 
 export interface MappingStepProps {
@@ -27,21 +50,27 @@ export interface MappingStepProps {
   onSelectAccount: (accountId: string) => void;
   instrumentSymbols: string[];
   symbolResolutions: Record<string, SymbolResolution>;
-  /** Called when the user clicks "Search" for a symbol. */
-  onSearchSymbol: (sourceTickerOrIsin: string) => void;
+  /** Search a security: broad search without a query, else the given query. */
+  onSearchSymbol: (sourceTickerOrIsin: string, query?: string) => void;
   /** Called when the user manually confirms a search result by index. */
   onConfirmSymbol: (sourceTickerOrIsin: string, resultIndex: number) => void;
   /** Remove an obsolete remembered mapping and start a fresh search. */
   onForgetSavedMapping: (sourceTickerOrIsin: string) => void;
-  /** Accept all unresolved symbols with exactly one fresh search result. */
+  /** Accept the suggested listing for every unresolved security. */
   onAcceptAllSuggested: () => Promise<void>;
   /** Whether a search is in progress for a symbol. */
   searchingFor: string | null;
-  /** Last search results for a symbol (for manual confirmation). */
-  searchResults: {
-    symbol: string;
-    results: { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[];
-  } | null;
+  /** Ranked search results per security. */
+  rankedResults: Record<string, RankedResultView[]>;
+  /** Statement name and traded currency per security. */
+  securityContexts: Record<string, SecurityContext>;
+  /** Exchange MICs in order of preference. */
+  preferredExchanges: string[];
+  onSavePreferredExchanges: (exchanges: string[]) => Promise<void>;
+  /** Number of mappings this add-on remembers for the account. */
+  rememberedCount: number;
+  /** Forget every remembered mapping of this add-on for the account. */
+  onForgetAllMappings: () => Promise<void>;
   /** Whether saved mappings are being loaded. */
   loadingMappings: boolean;
   /** Whether the one-result bulk acceptance is in progress. */
@@ -65,7 +94,12 @@ export function MappingStep(props: MappingStepProps): ReactElement {
     onForgetSavedMapping,
     onAcceptAllSuggested,
     searchingFor,
-    searchResults,
+    rankedResults,
+    securityContexts,
+    preferredExchanges,
+    onSavePreferredExchanges,
+    rememberedCount,
+    onForgetAllMappings,
     loadingMappings,
     acceptingSuggestedMappings,
     onContinue,
@@ -99,6 +133,15 @@ export function MappingStep(props: MappingStepProps): ReactElement {
       ) : null}
 
       {accountId && instrumentSymbols.length > 0 ? (
+        <MappingSettings
+          preferredExchanges={preferredExchanges}
+          onSave={onSavePreferredExchanges}
+          rememberedCount={rememberedCount}
+          onForgetAll={onForgetAllMappings}
+        />
+      ) : null}
+
+      {accountId && instrumentSymbols.length > 0 ? (
         <div className="space-y-3">
           <h3 className="text-sm font-medium">
             Securities to confirm ({instrumentSymbols.length})
@@ -113,11 +156,11 @@ export function MappingStep(props: MappingStepProps): ReactElement {
                 data-testid="accept-all-suggested"
               >
                 {acceptingSuggestedMappings ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                Accept all unambiguous matches
+                Accept suggested listings
               </Button>
               <p className="text-xs text-muted-foreground">
-                Accepts only searches with exactly one result. Multiple or missing results still
-                need your review.
+                Accepts a listing only when it is the same instrument, in the currency you traded it
+                in, and first on your exchange preference. Everything else stays for your review.
               </p>
             </div>
           ) : null}
@@ -127,11 +170,12 @@ export function MappingStep(props: MappingStepProps): ReactElement {
                 key={sym}
                 symbol={sym}
                 resolution={symbolResolutions[sym] ?? { status: 'pending' }}
-                onSearch={() => onSearchSymbol(sym)}
+                context={securityContexts[sym]}
+                onSearch={(query) => onSearchSymbol(sym, query)}
                 onConfirm={(idx) => onConfirmSymbol(sym, idx)}
                 onForgetSavedMapping={() => onForgetSavedMapping(sym)}
                 searching={searchingFor === sym || acceptingSuggestedMappings}
-                searchResults={searchResults?.symbol === sym ? searchResults.results : null}
+                searchResults={rankedResults[sym] ?? null}
               />
             ))}
           </div>
@@ -205,17 +249,18 @@ function ParsedStatementSummary({ summary }: { summary: UploadSummary }): ReactE
 interface SymbolRowProps {
   symbol: string;
   resolution: SymbolResolution;
-  onSearch: () => void;
+  context: SecurityContext | undefined;
+  onSearch: (query?: string) => void;
   onConfirm: (resultIndex: number) => void;
   onForgetSavedMapping: () => void;
   searching: boolean;
-  searchResults:
-    { symbol: string; exchange: string; exchangeMic?: string; providerId?: string }[] | null;
+  searchResults: RankedResultView[] | null;
 }
 
 function SymbolRow({
   symbol,
   resolution,
+  context,
   onSearch,
   onConfirm,
   onForgetSavedMapping,
@@ -223,6 +268,10 @@ function SymbolRow({
   searchResults,
 }: SymbolRowProps): ReactElement {
   const [showResults, setShowResults] = useState(false);
+  const [query, setQuery] = useState('');
+  const hasResults = !!searchResults && searchResults.length > 0;
+  // Unresolved rows show their ranked results as soon as they exist.
+  const open = showResults || (resolution.status !== 'resolved' && hasResults);
 
   return (
     <div
@@ -231,7 +280,17 @@ function SymbolRow({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <p className="text-sm font-medium font-mono truncate">{symbol}</p>
+          <p className="text-sm font-medium truncate">
+            {context?.name ?? symbol}
+            {context?.name ? (
+              <span className="font-mono text-xs text-muted-foreground ml-2">{symbol}</span>
+            ) : null}
+          </p>
+          {context?.tradedCurrency ? (
+            <p className="text-xs text-muted-foreground">
+              Traded in {context.tradedCurrency} on DEGIRO
+            </p>
+          ) : null}
           <ResolutionBadge resolution={resolution} />
         </div>
         <Button
@@ -249,39 +308,83 @@ function SymbolRow({
           ) : (
             <Search className="h-4 w-4" />
           )}
-          Search
+          {resolution.status === 'resolved' ? 'Change' : 'Search'}
         </Button>
       </div>
 
-      {showResults && searchResults && searchResults.length > 0 ? (
+      {open ? (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (query.trim()) onSearch(query.trim());
+          }}
+        >
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search another ticker or name, e.g. IWDA.AS"
+            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm"
+            aria-label={`Custom search for ${symbol}`}
+            data-testid={`custom-query-${symbol}`}
+          />
+          <Button
+            type="submit"
+            variant="ghost"
+            size="sm"
+            disabled={searching || !query.trim()}
+            data-testid={`custom-search-${symbol}`}
+          >
+            Search
+          </Button>
+        </form>
+      ) : null}
+
+      {open && hasResults ? (
         <div className="space-y-1" data-testid={`search-results-${symbol}`}>
           <p className="text-xs text-muted-foreground">
-            {searchResults.length} result(s) — select the correct instrument:
+            {searchResults.length} listing(s), best match first — select the one you hold:
           </p>
           {searchResults.map((r, i) => (
             <button
-              key={`${r.symbol}-${r.exchange}-${i}`}
+              key={`${r.providerSymbolLabel}-${r.exchangeMic ?? r.exchange}-${i}`}
               type="button"
               onClick={() => {
                 onConfirm(i);
                 setShowResults(false);
               }}
-              className="w-full text-left text-sm border border-border rounded px-2 py-1 hover:bg-accent"
+              className={`w-full text-left text-sm border rounded px-2 py-1 hover:bg-accent ${
+                r.suggested ? 'border-success' : 'border-border'
+              } ${r.sameInstrument ? '' : 'opacity-70'}`}
               data-testid={`search-result-${symbol}-${i}`}
             >
-              <span className="font-mono">{r.symbol}</span>
-              <span className="text-muted-foreground"> — {r.exchange}</span>
-              {r.exchangeMic ? (
-                <span className="text-muted-foreground"> ({r.exchangeMic})</span>
+              <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="font-mono font-medium">{r.providerSymbolLabel}</span>
+                <span className="text-muted-foreground">
+                  {r.exchange}
+                  {r.exchangeMic ? ` (${r.exchangeMic})` : ''}
+                </span>
+                {r.quoteCcy ? (
+                  <span className={r.currencyMatch ? 'font-medium' : 'text-muted-foreground'}>
+                    {r.quoteCcy}
+                  </span>
+                ) : null}
+                {r.suggested ? <Badge variant="success">Suggested</Badge> : null}
+                {r.currencyMatch ? <Badge variant="secondary">Traded currency</Badge> : null}
+                {!r.sameInstrument ? <Badge variant="warning">Other instrument?</Badge> : null}
+              </span>
+              {r.name ? (
+                <span className="block text-xs text-muted-foreground truncate">{r.name}</span>
               ) : null}
             </button>
           ))}
         </div>
       ) : null}
 
-      {showResults && searchResults && searchResults.length === 0 ? (
+      {open && searchResults && searchResults.length === 0 ? (
         <p className="text-xs text-destructive" data-testid={`no-results-${symbol}`}>
-          No results found. This symbol blocks the import.
+          No results found. Try another ticker or the name above.
         </p>
       ) : null}
 
@@ -307,6 +410,104 @@ function SymbolRow({
           </Button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** Exchange preference and "forget remembered mappings" for the account. */
+function MappingSettings({
+  preferredExchanges,
+  onSave,
+  rememberedCount,
+  onForgetAll,
+}: {
+  preferredExchanges: string[];
+  onSave: (exchanges: string[]) => Promise<void>;
+  rememberedCount: number;
+  onForgetAll: () => Promise<void>;
+}): ReactElement {
+  const [text, setText] = useState(preferredExchanges.join(', '));
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => setText(preferredExchanges.join(', ')), [preferredExchanges]);
+  const dirty = parseExchangeList(text).join(',') !== preferredExchanges.join(',');
+
+  return (
+    <div className="rounded-md border border-border p-3 space-y-3" data-testid="mapping-settings">
+      <form
+        className="space-y-1"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void onSave(parseExchangeList(text));
+        }}
+      >
+        <label className="text-sm font-medium" htmlFor="preferred-exchanges">
+          Preferred exchanges
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            id="preferred-exchanges"
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
+            data-testid="preferred-exchanges"
+          />
+          <Button type="submit" variant="outline" size="sm" disabled={!dirty}>
+            Save
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Exchange codes (MIC) in order of preference, e.g. XAMS (Amsterdam), XETR (Xetra), XPAR
+          (Paris), XMIL (Milan), XLON (London). Listings in the currency you traded in always come
+          first. Saved for this account.
+        </p>
+      </form>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
+        <p className="text-xs text-muted-foreground flex-1">
+          {rememberedCount > 0
+            ? `${rememberedCount} remembered mapping(s) for this account are applied automatically.`
+            : 'No remembered mappings for this account.'}
+        </p>
+        {confirming ? (
+          <>
+            <span className="text-xs">Forget all {rememberedCount} for this account?</span>
+            <Button
+              variant="destructive"
+              size="sm"
+              disabled={busy}
+              onClick={() => {
+                setBusy(true);
+                onForgetAll()
+                  .catch(() => {
+                    // Nothing changed; the button can be used again.
+                  })
+                  .finally(() => {
+                    setBusy(false);
+                    setConfirming(false);
+                  });
+              }}
+              data-testid="confirm-forget-all-mappings"
+            >
+              Forget all
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={rememberedCount === 0}
+            onClick={() => setConfirming(true)}
+            data-testid="forget-all-mappings"
+          >
+            Forget remembered mappings
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
