@@ -210,3 +210,43 @@ export function resolveSymbol(
     return { status: 'blocked', reason: 'Single search result has no canonical symbol' };
   return { status: 'resolved', identity, fromSaved: false };
 }
+
+/**
+ * Remove every remembered mapping of this add-on for the account. Other
+ * importers' mappings and all non-symbol sections are preserved.
+ */
+export function withoutAllSavedMappings(mapping: ImportMappingData): ImportMappingData {
+  const symbolMappings: Record<string, string> = {};
+  for (const [key, value] of Object.entries(mapping.symbolMappings ?? {})) {
+    if (!key.startsWith(`${IMPORTER_ID}::`)) symbolMappings[key] = value;
+  }
+  return { ...mapping, symbolMappings };
+}
+
+/** Number of mappings this add-on remembers for the account. */
+export function countSavedMappings(mapping: ImportMappingData): number {
+  return Object.keys(mapping.symbolMappings ?? {}).filter((k) => k.startsWith(`${IMPORTER_ID}::`))
+    .length;
+}
+
+/** Namespaced `fieldMappings` key holding the preferred exchange order. */
+const PREFERRED_EXCHANGES_KEY = `${IMPORTER_ID}::preferredExchanges`;
+
+/** The account's saved exchange preference, if any. */
+export function readPreferredExchanges(mapping: ImportMappingData): string[] | undefined {
+  const value = mapping.fieldMappings?.[PREFERRED_EXCHANGES_KEY];
+  if (!Array.isArray(value)) return undefined;
+  const mics = value.filter((v): v is string => typeof v === 'string' && v.trim() !== '');
+  return mics.length > 0 ? mics.map((m) => m.trim().toUpperCase()) : undefined;
+}
+
+/** Store the account's exchange preference. Does not mutate the input. */
+export function withPreferredExchanges(
+  mapping: ImportMappingData,
+  exchanges: readonly string[],
+): ImportMappingData {
+  return {
+    ...mapping,
+    fieldMappings: { ...(mapping.fieldMappings ?? {}), [PREFERRED_EXCHANGES_KEY]: [...exchanges] },
+  };
+}

@@ -1,6 +1,6 @@
 {
   "name": "wealthfolio-degiro-importer",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "type": "module",
   "description": "Wealthfolio addon for importing DEGIRO account statements",
   "engines": {

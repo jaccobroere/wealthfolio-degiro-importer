@@ -18,7 +18,7 @@
  * import call. Upload, mapping, review, and reconciliation never write.
  */
 import { useCallback, useEffect, useMemo, useReducer, useState, type ReactElement } from 'react';
-import type { AddonContext, AddonRouteLocation } from '@wealthfolio/addon-sdk';
+import type { AddonContext, AddonRouteLocation, SymbolSearchResult } from '@wealthfolio/addon-sdk';
 
 import { UploadStep } from '../components/upload-step';
 import { MappingStep } from '../components/mapping-step';
@@ -33,7 +33,9 @@ import {
   computeReconciliationResiduals,
   computeImportGate,
   computeAccountMatch,
+  securityContexts,
   type ImportState,
+  type SecurityContext,
   type UploadSummary,
   type SymbolResolution,
   type ResolvedMapping,
@@ -45,13 +47,26 @@ import { getAllAccounts, getActivities, getImportMapping, searchTicker } from '.
 import { buildDuplicateIndex } from '../wealthfolio/duplicate-index';
 import { toExistingActivities } from '../wealthfolio/existing-activities';
 import {
+  countSavedMappings,
+  readPreferredExchanges,
   readSavedMappings,
   resolveSymbol,
+  resultToIdentity,
   identityToAsset,
+  withPreferredExchanges,
   withSavedMapping,
+  withoutAllSavedMappings,
   withoutSavedMapping,
   type CanonicalIdentity,
 } from '../wealthfolio/symbol-mappings';
+import { broadSearch } from '../wealthfolio/broad-search';
+import {
+  DEFAULT_PREFERRED_EXCHANGES,
+  rankListings,
+  suggestListing,
+  type RankedListing,
+} from '../mapping/listing-choice';
+import type { RankedResultView } from '../components/mapping-step';
 import { runImport } from '../wealthfolio/import';
 import type { ImportFlowResult } from '../wealthfolio/types';
 import { isInstrumentSymbol } from '../domain/activity-draft';
@@ -67,10 +82,12 @@ export interface ImporterPageProps {
 export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   const [state, dispatch] = useReducer(importReducer, undefined, initialImportState);
   const [searchingFor, setSearchingFor] = useState<string | null>(null);
-  const [searchResults, setSearchResults] = useState<{
-    symbol: string;
-    results: CompactSearchResult[];
-  } | null>(null);
+  // Raw search results per security (re-ranked when preferences change).
+  const [rawResults, setRawResults] = useState<Record<string, RawSearch>>({});
+  const [preferredExchanges, setPreferredExchanges] = useState<string[]>([
+    ...DEFAULT_PREFERRED_EXCHANGES,
+  ]);
+  const [rememberedCount, setRememberedCount] = useState(0);
   const [loadingMappings, setLoadingMappings] = useState(false);
   const [acceptingSuggestedMappings, setAcceptingSuggestedMappings] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
@@ -117,20 +134,34 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
         // Non-fatal: empty duplicate index.
       });
 
-    // Load saved mappings and auto-apply verified ones.
+    // Load saved mappings and the exchange preference; auto-apply verified
+    // mappings. A saved listing is re-verified by searching its own provider
+    // symbol (e.g. `IWDA.AS`), falling back to the broad search, because an
+    // ISIN search alone only returns the primary listing.
     setLoadingMappings(true);
     getImportMapping(ctx.api, accountId, IMPORTER_ID)
       .then(async (mapping) => {
         if (cancelled) return;
         const saved = readSavedMappings(mapping);
+        setRememberedCount(countSavedMappings(mapping));
+        setPreferredExchanges(readPreferredExchanges(mapping) ?? [...DEFAULT_PREFERRED_EXCHANGES]);
         const resolutions: Record<string, SymbolResolution> = {};
         for (const sym of state.instrumentSymbols) {
           const savedIdentity = saved.get(sym);
           if (savedIdentity) {
-            // Re-verify against a fresh search.
             try {
-              const results = await searchTicker(ctx.api, sym);
-              const outcome = resolveSymbol(sym, saved, results);
+              const direct = await searchTicker(
+                ctx.api,
+                savedIdentity.providerSymbol ?? savedIdentity.symbol,
+              );
+              let outcome = resolveSymbol(sym, saved, direct);
+              if (outcome.status !== 'resolved' || direct.length === 0) {
+                // Not confirmed by its own listing: verify against the broad
+                // search. Only when nothing at all is found (offline) is the
+                // saved mapping trusted as-is.
+                const broad = await broadSearch(ctx.api, searchInputFor(sym, contexts[sym]));
+                outcome = resolveSymbol(sym, saved, [...direct, ...broad.results]);
+              }
               resolutions[sym] = outcomeToResolution(sym, outcome);
             } catch {
               resolutions[sym] = { status: 'pending' };
@@ -151,6 +182,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     return () => {
       cancelled = true;
     };
+    // `contexts` derives from the same pipeline as `instrumentSymbols`.
   }, [ctx, state.accountId, state.instrumentSymbols]);
 
   // Re-run the pure pipeline whenever the reviewer changes a row decision.
@@ -209,6 +241,8 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   const residuals = useMemo(() => computeReconciliationResiduals(state), [state]);
   const gate = useMemo(() => computeImportGate(state), [state]);
   const accountMatch = useMemo(() => computeAccountMatch(state), [state]);
+  const batch = state.pipeline?.batch;
+  const contexts = useMemo(() => (batch ? securityContexts(batch) : {}), [batch]);
   const reconciliation = state.pipeline?.reconciliation;
 
   // Handlers.
@@ -216,43 +250,57 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     dispatch({ type: 'UPLOAD_SUCCESS', pipeline, summary });
   }
 
-  function handleSearchSymbol(sourceTickerOrIsin: string): void {
+  /** Rank one security's raw results with the current preferences. */
+  function rankFor(sym: string): RankedResultView[] {
+    const raw = rawResults[sym];
+    if (!raw) return [];
+    const ranked = rankListings(raw.results, {
+      ...(contexts[sym]?.tradedCurrency ? { tradedCurrency: contexts[sym]?.tradedCurrency } : {}),
+      ...(raw.anchorName ? { anchorName: raw.anchorName } : {}),
+      preferredExchanges,
+    });
+    const suggested = suggestListing(ranked);
+    return ranked.map((r) => toView(r, r === suggested));
+  }
+
+  const rankedResults = useMemo(() => {
+    const out: Record<string, RankedResultView[]> = {};
+    for (const sym of Object.keys(rawResults)) out[sym] = rankFor(sym);
+    return out;
+    // rankFor reads exactly these inputs.
+  }, [rawResults, preferredExchanges, contexts]);
+
+  /**
+   * Search one security. Without a query this is the broad search (ISIN,
+   * ticker roots, instrument and product names); with a query it is exactly
+   * the reviewer's search, still ranked against the known instrument.
+   */
+  function handleSearchSymbol(sourceTickerOrIsin: string, query?: string): void {
     if (!ctx) return;
     setSearchingFor(sourceTickerOrIsin);
-    searchTicker(ctx.api, sourceTickerOrIsin)
-      .then((results) => {
-        setSearchResults({
-          symbol: sourceTickerOrIsin,
-          results: results.map((r) => ({
-            symbol: r.canonicalSymbol ?? r.symbol,
-            exchange: r.exchange,
-            ...((r.canonicalExchangeMic ?? r.exchangeMic)
-              ? { exchangeMic: r.canonicalExchangeMic ?? r.exchangeMic }
-              : {}),
-            ...(r.providerId ? { providerId: r.providerId } : {}),
-            ...(r.currency ? { quoteCcy: r.currency } : {}),
-            ...(r.quoteType ? { instrumentType: r.quoteType } : {}),
-            ...(r.providerSymbol ? { providerSymbol: r.providerSymbol } : {}),
-            ...(r.assetKind ? { kind: r.assetKind } : {}),
-          })),
-        });
-
-        if (results.length === 0) {
-          dispatch({
-            type: 'RESOLVE_SYMBOL',
-            sourceTickerOrIsin,
-            resolution: { status: 'no-results' },
-          });
-          return;
-        }
-
+    const custom = query?.trim();
+    const search: Promise<RawSearch> = custom
+      ? searchTicker(ctx.api, custom).then((results) => ({
+          results,
+          ...(rawResults[sourceTickerOrIsin]?.anchorName
+            ? { anchorName: rawResults[sourceTickerOrIsin]?.anchorName }
+            : {}),
+        }))
+      : broadSearch(ctx.api, searchInputFor(sourceTickerOrIsin, contexts[sourceTickerOrIsin]));
+    search
+      .then((raw) => {
+        setRawResults((prev) => ({ ...prev, [sourceTickerOrIsin]: raw }));
+        // A confirmed mapping stays until the reviewer picks another listing.
+        if (state.symbolResolutions[sourceTickerOrIsin]?.status === 'resolved') return;
         dispatch({
           type: 'RESOLVE_SYMBOL',
           sourceTickerOrIsin,
           resolution:
-            results.length > 1
-              ? { status: 'ambiguous', candidateCount: results.length }
-              : { status: 'pending' },
+            raw.results.length === 0
+              ? { status: 'no-results' }
+              : raw.results.length > 1
+                ? { status: 'ambiguous', candidateCount: raw.results.length }
+                : { status: 'pending' },
         });
       })
       .catch(() => {
@@ -265,19 +313,23 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       .finally(() => setSearchingFor(null));
   }
 
+  function persistMapping(sourceTickerOrIsin: string, identity: CanonicalIdentity): void {
+    if (!ctx || !state.accountId) return;
+    getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
+      .then((existing) => {
+        const updated = withSavedMapping(existing, sourceTickerOrIsin, identity);
+        setRememberedCount(countSavedMappings(updated));
+        return ctx.api.activities.saveImportMapping(updated);
+      })
+      .catch(() => {
+        // Non-fatal: mapping not persisted; will need re-confirmation next time.
+      });
+  }
+
   function handleConfirmSymbol(sourceTickerOrIsin: string, resultIndex: number): void {
-    if (!ctx || !searchResults || searchResults.symbol !== sourceTickerOrIsin) return;
-    const result = searchResults.results[resultIndex];
-    if (!result) return;
-    const identity: CanonicalIdentity = {
-      symbol: result.symbol,
-      ...(result.exchangeMic ? { exchangeMic: result.exchangeMic } : {}),
-      ...(result.providerId ? { providerId: result.providerId } : {}),
-      ...(result.quoteCcy ? { quoteCcy: result.quoteCcy } : {}),
-      ...(result.instrumentType ? { instrumentType: result.instrumentType } : {}),
-      ...(result.providerSymbol ? { providerSymbol: result.providerSymbol } : {}),
-      ...(result.kind ? { kind: result.kind } : {}),
-    };
+    const view = rankedResults[sourceTickerOrIsin]?.[resultIndex];
+    if (!ctx || !view) return;
+    const identity = viewToIdentity(view);
     dispatch({
       type: 'RESOLVE_SYMBOL',
       sourceTickerOrIsin,
@@ -286,18 +338,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
         mapping: toResolvedMapping(sourceTickerOrIsin, identity, false),
       },
     });
-
-    // Persist the confirmed mapping.
-    if (state.accountId) {
-      getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
-        .then((existing) => {
-          const updated = withSavedMapping(existing, sourceTickerOrIsin, identity);
-          return ctx.api.activities.saveImportMapping(updated);
-        })
-        .catch(() => {
-          // Non-fatal: mapping not persisted; will need re-confirmation next time.
-        });
-    }
+    persistMapping(sourceTickerOrIsin, identity);
   }
 
   function handleForgetSavedMapping(sourceTickerOrIsin: string): void {
@@ -312,9 +353,11 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     });
 
     getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
-      .then((existing) =>
-        ctx.api.activities.saveImportMapping(withoutSavedMapping(existing, sourceTickerOrIsin)),
-      )
+      .then((existing) => {
+        const updated = withoutSavedMapping(existing, sourceTickerOrIsin);
+        setRememberedCount(countSavedMappings(updated));
+        return ctx.api.activities.saveImportMapping(updated);
+      })
       .catch(() => {
         // The stale entry remains only in the host record. It cannot be
         // auto-applied during this open import because state now requires a
@@ -324,9 +367,38 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   }
 
   /**
-   * Accept every unresolved source security whose fresh host search returns
-   * exactly one canonical result. Existing saved/manual mappings are never
-   * overwritten; no-result and multi-result searches remain for review.
+   * Forget every mapping this add-on remembers for the selected account.
+   * Other importers' mappings are kept. All securities return to pending.
+   */
+  async function handleForgetAllMappings(): Promise<void> {
+    if (!ctx || !state.accountId) return;
+    const existing = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
+    await ctx.api.activities.saveImportMapping(withoutAllSavedMappings(existing));
+    setRememberedCount(0);
+    setRawResults({});
+    const resolutions: Record<string, SymbolResolution> = {};
+    for (const sym of state.instrumentSymbols) resolutions[sym] = { status: 'pending' };
+    dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
+  }
+
+  /** Save the exchange preference for this account and re-rank results. */
+  async function handleSavePreferredExchanges(exchanges: string[]): Promise<void> {
+    const next = exchanges.length > 0 ? exchanges : [...DEFAULT_PREFERRED_EXCHANGES];
+    setPreferredExchanges(next);
+    if (!ctx || !state.accountId) return;
+    try {
+      const existing = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
+      await ctx.api.activities.saveImportMapping(withPreferredExchanges(existing, next));
+    } catch {
+      // Non-fatal: the preference applies to this session.
+    }
+  }
+
+  /**
+   * Accept the suggested listing for every unresolved security: the same
+   * instrument, in the currency the statement traded it in, and strictly
+   * first on the exchange preference. Anything else stays for review, with
+   * its ranked results shown. Existing confirmed mappings are never replaced.
    */
   async function handleAcceptAllSuggestedMappings(): Promise<void> {
     if (!ctx || !state.accountId || acceptingSuggestedMappings) return;
@@ -334,10 +406,8 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     setAcceptingSuggestedMappings(true);
     try {
       let existingMapping: Awaited<ReturnType<typeof getImportMapping>> | null = null;
-      let saved = new Map<string, CanonicalIdentity>();
       try {
         existingMapping = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
-        saved = readSavedMappings(existingMapping);
       } catch {
         // Resolution remains useful when persistence is temporarily unavailable.
         // Do not overwrite an unknown mapping document.
@@ -345,26 +415,39 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
 
       const resolutions = { ...state.symbolResolutions };
       const newlyConfirmed: [string, CanonicalIdentity][] = [];
-      for (const sourceTickerOrIsin of state.instrumentSymbols) {
-        if (
-          resolutions[sourceTickerOrIsin]?.status === 'resolved' ||
-          saved.has(sourceTickerOrIsin)
-        ) {
-          continue;
-        }
-
+      const fetched: Record<string, RawSearch> = {};
+      for (const sym of state.instrumentSymbols) {
+        if (resolutions[sym]?.status === 'resolved') continue;
         try {
-          const results = await searchTicker(ctx.api, sourceTickerOrIsin);
-          const outcome = resolveSymbol(sourceTickerOrIsin, saved, results);
-          resolutions[sourceTickerOrIsin] = outcomeToResolution(sourceTickerOrIsin, outcome);
-          if (outcome.status === 'resolved' && !outcome.fromSaved) {
-            newlyConfirmed.push([sourceTickerOrIsin, outcome.identity]);
+          const raw = await broadSearch(ctx.api, searchInputFor(sym, contexts[sym]));
+          fetched[sym] = raw;
+          const ranked = rankListings(raw.results, {
+            ...(contexts[sym]?.tradedCurrency
+              ? { tradedCurrency: contexts[sym]?.tradedCurrency }
+              : {}),
+            ...(raw.anchorName ? { anchorName: raw.anchorName } : {}),
+            preferredExchanges,
+          });
+          const suggested = suggestListing(ranked);
+          if (suggested) {
+            const identity = resultToIdentity(suggested.candidate);
+            resolutions[sym] = {
+              status: 'resolved',
+              mapping: toResolvedMapping(sym, identity, false),
+            };
+            newlyConfirmed.push([sym, identity]);
+          } else {
+            resolutions[sym] =
+              raw.results.length === 0
+                ? { status: 'no-results' }
+                : { status: 'ambiguous', candidateCount: raw.results.length };
           }
         } catch {
-          resolutions[sourceTickerOrIsin] = { status: 'blocked', reason: 'Search failed' };
+          resolutions[sym] = { status: 'blocked', reason: 'Search failed' };
         }
       }
 
+      setRawResults((prev) => ({ ...prev, ...fetched }));
       dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
 
       if (existingMapping && newlyConfirmed.length > 0) {
@@ -375,6 +458,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
         );
         try {
           await ctx.api.activities.saveImportMapping(updated);
+          setRememberedCount(countSavedMappings(updated));
         } catch {
           // Non-fatal: accepted mappings stay available for this import.
         }
@@ -480,7 +564,12 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           onForgetSavedMapping={handleForgetSavedMapping}
           onAcceptAllSuggested={handleAcceptAllSuggestedMappings}
           searchingFor={searchingFor}
-          searchResults={searchResults}
+          rankedResults={rankedResults}
+          securityContexts={contexts}
+          preferredExchanges={preferredExchanges}
+          onSavePreferredExchanges={handleSavePreferredExchanges}
+          rememberedCount={rememberedCount}
+          onForgetAllMappings={handleForgetAllMappings}
           loadingMappings={loadingMappings}
           acceptingSuggestedMappings={acceptingSuggestedMappings}
           onContinue={() => dispatch({ type: 'GOTO_STEP', step: 'review' })}
@@ -547,16 +636,54 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   );
 }
 
-/** Compact search result for the mapping UI. */
-interface CompactSearchResult {
-  symbol: string;
-  exchange: string;
-  exchangeMic?: string;
-  providerId?: string;
-  quoteCcy?: string;
-  instrumentType?: string;
-  providerSymbol?: string;
-  kind?: string;
+/** Raw results of one security's search, before ranking. */
+interface RawSearch {
+  results: SymbolSearchResult[];
+  anchorName?: string;
+}
+
+const ISIN_PATTERN = /^[A-Z]{2}[A-Z0-9]{9}[0-9]$/;
+
+/** Broad-search input for a DEGIRO source key (ISIN or product name). */
+function searchInputFor(sourceKey: string, context: SecurityContext | undefined) {
+  return ISIN_PATTERN.test(sourceKey)
+    ? { isin: sourceKey, ...(context?.name ? { name: context.name } : {}) }
+    : { name: sourceKey };
+}
+
+/** A ranked search result as the mapping step shows it. */
+function toView(r: RankedListing<SymbolSearchResult>, suggested: boolean): RankedResultView {
+  const c = r.candidate;
+  return {
+    symbol: c.canonicalSymbol ?? c.symbol,
+    providerSymbolLabel: c.symbol,
+    exchange: c.exchangeName ?? c.exchange,
+    ...((c.canonicalExchangeMic ?? c.exchangeMic)
+      ? { exchangeMic: c.canonicalExchangeMic ?? c.exchangeMic }
+      : {}),
+    ...(c.providerId ? { providerId: c.providerId } : {}),
+    ...(c.currency ? { quoteCcy: c.currency } : {}),
+    ...(c.quoteType ? { instrumentType: c.quoteType } : {}),
+    ...(c.providerSymbol ? { providerSymbol: c.providerSymbol } : {}),
+    ...(c.assetKind ? { kind: c.assetKind } : {}),
+    ...(c.longName || c.shortName ? { name: c.longName || c.shortName } : {}),
+    sameInstrument: r.sameInstrument,
+    currencyMatch: r.currencyMatch,
+    preferredExchange: Number.isFinite(r.exchangeRank),
+    suggested,
+  };
+}
+
+function viewToIdentity(view: RankedResultView): CanonicalIdentity {
+  return {
+    symbol: view.symbol,
+    ...(view.exchangeMic ? { exchangeMic: view.exchangeMic } : {}),
+    ...(view.providerId ? { providerId: view.providerId } : {}),
+    ...(view.quoteCcy ? { quoteCcy: view.quoteCcy } : {}),
+    ...(view.instrumentType ? { instrumentType: view.instrumentType } : {}),
+    ...(view.providerSymbol ? { providerSymbol: view.providerSymbol } : {}),
+    ...(view.kind ? { kind: view.kind } : {}),
+  };
 }
 
 /** Convert a `ResolutionOutcome` to a UI `SymbolResolution`. */
