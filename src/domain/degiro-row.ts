@@ -50,7 +50,7 @@ export const MONEY_MARKET_FUND_ISIN = 'LU1959429272';
 
 /**
  * Flatex bank-account pseudo-ISIN used by older exports. The real statement
- * uses real NL00… bond ISINs for cash-equivalent coupons; those are matched by
+ * uses real bond ISINs for coupons; those are matched by
  * description instead.
  */
 export const FLATEX_ACCOUNT_ISIN = 'NLFLATEXACNT';

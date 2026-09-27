@@ -25,6 +25,7 @@ export type RowKind =
   | 'DIVIDEND'
   | 'INTEREST'
   | 'FEE'
+  | 'CREDIT'
   | 'FX'
   | 'ACCRUED_INTEREST'
   | { kind: 'KNOWN_SKIP'; reason: SkipReason }
@@ -49,9 +50,12 @@ export function classifyRow(row: DegiroRow): Classification {
   const low = d.toLowerCase();
   const amount = changeAmount(row);
 
-  // ── ISIN-based skip: money-market fund (must precede trade/UNKNOWN rules so
+  // ── Money-market fund (must precede trade/UNKNOWN rules so
   //    `conversie geldmarktfonds: koop …` noise is not misread as a trade). ─
   if (row.isin === MONEY_MARKET_FUND_ISIN) {
+    if (amount && !amount.isZero()) {
+      return { kind: amount.isNegative() ? 'FEE' : 'CREDIT' };
+    }
     return { kind: { kind: 'KNOWN_SKIP', reason: 'money-market-fund' } };
   }
 
@@ -73,13 +77,13 @@ export function classifyRow(row: DegiroRow): Classification {
   if (low.includes('wijziging isin') || low.startsWith('productwijziging')) {
     return { kind: { kind: 'KNOWN_SKIP', reason: 'isin-rename' } };
   }
-  // Promotional welcome credit (no ISIN, no order id). v1 deferral.
+  // Promotional welcome credit (no ISIN, no order id).
   if (low === 'verrekening welkomstactie' || low.startsWith('verrekening welkomstactie')) {
-    return { kind: { kind: 'KNOWN_SKIP', reason: 'promotional-credit' } };
+    return { kind: 'CREDIT' };
   }
-  // Cash-equivalent bond coupons (NL00… ISINs). v1 models equity dividends only.
+  // Bond coupon income; unlike sweeps, this is a real cash inflow.
   if (low === 'coupon') {
-    return { kind: { kind: 'KNOWN_SKIP', reason: 'cash-equivalent-coupon' } };
+    return { kind: 'INTEREST' };
   }
   // Account-level interest bookkeeping with no ISIN; flatex interest rows carry
   // the modelled INTEREST activities.

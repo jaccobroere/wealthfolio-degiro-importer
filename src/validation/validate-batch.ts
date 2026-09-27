@@ -7,14 +7,14 @@
  * Routing rules (every well-formed row gets exactly one outcome):
  *  - `KNOWN_SKIP` classification         → known-skip outcome with reason.
  *  - rows WITH an order id and a groupable kind (BUY/SELL/TRADE_FEE/
- *    ACCRUED_INTEREST/FX/TAX)            → order-id group → group-member
+ *    ACCRUED_INTEREST/TAX)               → order-id group → group-member
  *                                          outcomes + derived activity.
  *  - BUY/SELL WITHOUT an order id        → single-row group (preserved).
  *  - TRADE_FEE/ACCRUED_INTEREST w/o oid  → known-skip (orphan).
- *  - FX w/o order id                     → known-skip (fx-helper).
+ *  - FX                                 → paired cash transfers, grouped by
+ *                                          order or exact timestamp/value date.
  *  - DIVIDEND/TAX/DEPOSIT/WITHDRAWAL/
- *    INTEREST/FEE                        → standalone activity (or zero-amount
- *                                          / positive-reversal skip).
+ *    INTEREST/FEE/CREDIT                 → standalone activity (or zero-amount skip).
  *  - anything else                       → unsupported (blocks the batch).
  *
  * Reviewer overrides are applied first: an ignored row short-circuits to a
@@ -30,6 +30,7 @@ import { applyRowPatch, changedFields, type RowOverrides } from '../domain/row-o
 import { classifyRow } from '../mapping/classify-row';
 import { mapOrderGroup, type OrphanRole } from '../mapping/map-order-group';
 import { mapStandalone } from '../mapping/map-standalone';
+import { mapFxGroup } from '../mapping/map-fx-group';
 import { validateRow } from './validate-row';
 
 /** Warning key attached to activities derived from a reviewer-edited row. */
@@ -44,12 +45,12 @@ export const SOURCE_EDITED_WARNING = 'sourceEdited';
 export const GROUP_ROW_CHANGED_WARNING = 'groupRowChanged';
 
 /** Kinds that belong to an order-id group when an order id is present. */
-const GROUPABLE_KINDS = new Set(['BUY', 'SELL', 'TRADE_FEE', 'ACCRUED_INTEREST', 'FX', 'TAX']);
+const GROUPABLE_KINDS = new Set(['BUY', 'SELL', 'TRADE_FEE', 'ACCRUED_INTEREST', 'TAX']);
 
 /** Whether a classification kind is groupable. */
 function isGroupable(
   kind: unknown,
-): kind is 'BUY' | 'SELL' | 'TRADE_FEE' | 'ACCRUED_INTEREST' | 'FX' | 'TAX' {
+): kind is 'BUY' | 'SELL' | 'TRADE_FEE' | 'ACCRUED_INTEREST' | 'TAX' {
   return kind !== null && typeof kind === 'string' && GROUPABLE_KINDS.has(kind as string);
 }
 
@@ -99,19 +100,50 @@ export function buildBatch(rows: DegiroRow[], overrides: RowOverrides = {}): Bat
 
   // 2) Partition: groupable-with-oid, ungrouped-trade, standalone, skip, unsupported.
   const orderByOrderId = new Map<string, DegiroRow[]>();
+  const fxGroups = new Map<string, DegiroRow[]>();
   const standaloneRows: DegiroRow[] = [];
 
   for (const row of validRows) {
     const c = classifyRow(row).kind;
 
-    if (isGroupable(c) && row.orderId !== '') {
+    if (c === 'FX') {
+      const key = row.orderId || `${row.date}:${row.time}:${row.valueDate}`;
+      const bucket = fxGroups.get(key) ?? [];
+      bucket.push(row);
+      fxGroups.set(key, bucket);
+    } else if (isGroupable(c) && row.orderId !== '') {
       const bucket = orderByOrderId.get(row.orderId) ?? [];
       bucket.push(row);
       orderByOrderId.set(row.orderId, bucket);
     } else {
-      // KNOWN_SKIP, ungrouped trades, FX/fees without oid, and standalone
+      // KNOWN_SKIP, ungrouped trades, fees without oid, and standalone
       // activity kinds are all resolved in the standalone pass below.
       standaloneRows.push(row);
+    }
+  }
+
+  for (const groupRows of fxGroups.values()) {
+    const mapped = mapFxGroup(groupRows);
+    if (mapped.length === 0) {
+      for (const row of groupRows)
+        outcomes.push({
+          kind: 'unsupported',
+          rowIndex: row.rowIndex,
+          reason: 'Incomplete or ambiguous currency conversion; both cash legs are required',
+        });
+      continue;
+    }
+    for (const activity of mapped) {
+      const activityIndex = activities.length;
+      activities.push(activity);
+      for (const rowIndex of activity.sourceRowNumbers)
+        outcomes.push({
+          kind: 'group-member',
+          rowIndex,
+          orderId: groupRows[0].orderId,
+          activityIndex,
+          role: 'fx',
+        });
     }
   }
 
@@ -173,10 +205,6 @@ export function buildBatch(rows: DegiroRow[], overrides: RowOverrides = {}): Bat
       outcomes.push({ kind: 'known-skip', rowIndex: row.rowIndex, reason: c.reason });
       continue;
     }
-    if (c === 'FX') {
-      outcomes.push({ kind: 'known-skip', rowIndex: row.rowIndex, reason: 'fx-helper' });
-      continue;
-    }
     if (c === 'TRADE_FEE') {
       outcomes.push({ kind: 'known-skip', rowIndex: row.rowIndex, reason: 'orphan-trade-fee' });
       continue;
@@ -192,7 +220,8 @@ export function buildBatch(rows: DegiroRow[], overrides: RowOverrides = {}): Bat
       c === 'DEPOSIT' ||
       c === 'WITHDRAWAL' ||
       c === 'INTEREST' ||
-      c === 'FEE'
+      c === 'FEE' ||
+      c === 'CREDIT'
     ) {
       const res = mapStandalone(row);
       if (res.kind === 'activity') {
@@ -267,9 +296,8 @@ function annotateEditedActivities(
  * `annotateEditedActivities` is not enough here. An activity's
  * `sourceRowNumbers` lists only its trade and fee rows, and a changed row may
  * not be among them at all: an ignored row is dropped before grouping, an edit
- * can reclassify a fill out of its group entirely, and an edited FX row shifts
- * the converted fee without ever being listed. In each case the trade's
- * quantity, amount, or fee moves while the activity still reviews as clean.
+ * can reclassify a fill out of its group entirely. In each case the trade's
+ * quantity, amount, or fee can move while the activity still reviews as clean.
  *
  * Keyed on the order id, which is not editable, so a row cannot change which
  * group it is accounted against. Rows with no order id are excluded: each forms

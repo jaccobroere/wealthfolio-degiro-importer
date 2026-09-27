@@ -40,13 +40,21 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
       kind === 'TAX' ||
       kind === 'DEPOSIT' ||
       kind === 'WITHDRAWAL' ||
-      kind === 'FEE') &&
+      kind === 'FEE' ||
+      kind === 'CREDIT') &&
     absAmt.isZero()
   ) {
     return { kind: 'known-skip', reason: 'zero-amount' };
   }
 
   switch (kind) {
+    case 'CREDIT':
+      return cashActivity(
+        row,
+        raw.isNegative() ? 'FEE' : 'CREDIT',
+        absAmt,
+        row.description.toLowerCase().startsWith('verrekening welkomstactie') ? 'BONUS' : undefined,
+      );
     case 'DEPOSIT':
       return {
         kind: 'activity',
@@ -88,6 +96,9 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
       };
 
     case 'DIVIDEND': {
+      // The host normalizes all saved amounts to absolute values. A negative
+      // DIVIDEND would therefore become income again; preserve its cash as a charge.
+      if (raw.isNegative()) return cashActivity(row, 'FEE', absAmt);
       const symbol = row.isin || row.product;
       if (!symbol) return { kind: 'unsupported' };
       return {
@@ -113,6 +124,7 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
     }
 
     case 'INTEREST':
+      if (raw.isNegative()) return cashActivity(row, 'FEE', absAmt, 'INTEREST_CHARGE');
       return {
         kind: 'activity',
         activity: {
@@ -120,6 +132,7 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
           symbol: cashSymbol(currency),
           quantity: '1',
           activityType: 'INTEREST',
+          ...(row.description.toLowerCase() === 'coupon' ? { subtype: 'COUPON' as const } : {}),
           unitPrice: absAmt.toString(),
           currency,
           fee: '0',
@@ -128,11 +141,12 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
           sourceRowNumbers: [row.rowIndex],
           isValid: true,
           errors: {},
-          warnings: raw.isNegative() ? { amount: ['Negative interest — DEGIRO charged you'] } : {},
+          warnings: {},
         },
       };
 
     case 'FEE':
+      if (raw.isPositive()) return cashActivity(row, 'CREDIT', absAmt, 'REFUND');
       return {
         kind: 'activity',
         activity: {
@@ -153,8 +167,8 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
       };
 
     case 'TAX':
-      // Only import paid (negative) tax; positive = reversal, already classified.
-      if (!raw.isNegative()) return { kind: 'known-skip', reason: 'positive-reversal' };
+      // Refunds must be inflows, not another absolute-valued tax charge.
+      if (raw.isPositive()) return cashActivity(row, 'CREDIT', absAmt, 'REFUND');
       return {
         kind: 'activity',
         activity: {
@@ -180,4 +194,32 @@ export function mapStandalone(row: DegiroRow): StandaloneResult {
       // BUY/SELL/TRADE_FEE/ACCRUED_INTEREST/FX without an order id, or UNKNOWN.
       return { kind: 'unsupported' };
   }
+}
+
+function cashActivity(
+  row: DegiroRow,
+  activityType: 'FEE' | 'CREDIT',
+  amount: Decimal,
+  subtype?: ActivityDraft['subtype'],
+): StandaloneResult {
+  const currency = row.changeCurrency || 'EUR';
+  return {
+    kind: 'activity',
+    activity: {
+      date: toIsoDate(row.date, row.time),
+      symbol: cashSymbol(currency),
+      quantity: '1',
+      unitPrice: amount.toString(),
+      activityType,
+      ...(subtype ? { subtype } : {}),
+      amount: amount.toString(),
+      currency,
+      fee: '0',
+      comment: rowComment(row.description, row.product),
+      sourceRowNumbers: [row.rowIndex],
+      isValid: true,
+      errors: {},
+      warnings: {},
+    },
+  };
 }

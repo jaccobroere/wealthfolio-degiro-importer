@@ -37,8 +37,8 @@ export type OrphanRole = 'trade' | 'fx' | 'fee' | 'tax' | 'accrued';
 /**
  * Process all rows sharing one order id. Produces one aggregated BUY/SELL
  * activity (partial fills summed with Decimal, effective unit price derived from
- * authoritative mutation totals, broker fees merged and currency-converted), one
- * cash settlement for accrued interest, and one TAX activity per in-group FTT charge.
+ * authoritative mutation totals, same-currency broker fees merged), separate
+ * foreign-currency fees, accrued-interest cash settlements, and tax/refund activities.
  */
 export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): OrderGroupResult {
   const activities: ActivityDraft[] = [];
@@ -94,9 +94,13 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   // Effective unit price from authoritative mutation totals.
   const unitPrice = totalAmount.div(totalQty);
 
-  // Merge broker fees (always EUR on the statement; convert to trade currency
-  // for non-EUR trades using the group's FX rate).
-  let totalFee = feeRows.reduce(
+  // Only same-currency charges can be merged. Other-currency fees and
+  // refunds remain separate cash movements in their original currency.
+  const mergedFeeRows = feeRows.filter(
+    (row) => (row.changeCurrency || 'EUR') === currency && changeAmount(row)?.isNegative(),
+  );
+  const separateFeeRows = feeRows.filter((row) => !mergedFeeRows.includes(row));
+  const totalFee = mergedFeeRows.reduce(
     (s, r) => s.plus((changeAmount(r) ?? new Decimal(0)).abs()),
     new Decimal(0),
   );
@@ -108,7 +112,6 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
     });
     if (fxRow) {
       fxRate = tryParseDegiroDecimal(fxRow.fxRaw) ?? undefined;
-      if (fxRate) totalFee = totalFee.mul(fxRate);
     }
   }
 
@@ -133,7 +136,7 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   }
 
   const tradeSourceRowNumbers = tradeRows.map((r) => r.rowIndex);
-  const feeSourceRowNumbers = feeRows.map((r) => r.rowIndex);
+  const feeSourceRowNumbers = mergedFeeRows.map((r) => r.rowIndex);
 
   const group: GroupProvenance = {
     orderId: firstTrade.orderId,
@@ -210,8 +213,29 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
   for (const row of tradeRows) {
     memberships.push({ rowIndex: row.rowIndex, activityIndex: tradeActivityIndex, role: 'trade' });
   }
-  for (const row of feeRows) {
+  for (const row of mergedFeeRows) {
     memberships.push({ rowIndex: row.rowIndex, activityIndex: tradeActivityIndex, role: 'fee' });
+  }
+  for (const row of separateFeeRows) {
+    const amount = changeAmount(row) ?? new Decimal(0);
+    const feeCurrency = row.changeCurrency || 'EUR';
+    const activityIndex = activityIndexOffset + activities.length;
+    activities.push({
+      date: toIsoDate(row.date, row.time),
+      symbol: cashSymbol(feeCurrency),
+      activityType: amount.isNegative() ? 'FEE' : 'CREDIT',
+      quantity: '1',
+      unitPrice: amount.abs().toString(),
+      amount: amount.abs().toString(),
+      currency: feeCurrency,
+      fee: '0',
+      comment: row.description,
+      sourceRowNumbers: [row.rowIndex],
+      isValid: true,
+      errors: {},
+      warnings: {},
+    });
+    memberships.push({ rowIndex: row.rowIndex, activityIndex, role: 'fee' });
   }
   for (const row of accruedRows) {
     memberships.push({
@@ -224,7 +248,7 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
     memberships.push({ rowIndex: row.rowIndex, activityIndex: tradeActivityIndex, role: 'fx' });
   }
 
-  // In-group French FTT (`transactiebelasting`) → one TAX activity per paid row.
+  // In-group French FTT → a TAX charge or CREDIT refund per monetary row.
   // (Dividend withholding tax never carries an order id and is handled standalone.)
   for (const row of taxRows) {
     const taxActivity = buildGroupTaxActivity(row);
@@ -244,7 +268,7 @@ export function mapOrderGroup(rows: DegiroRow[], activityIndexOffset: number): O
  *
  * Several branches legitimately decline to build an activity from a row — an
  * order group with no parent trade, a group whose fills sum to zero quantity, a
- * positive (reversal) in-group FTT row. Without this sweep those rows would
+ * zero-amount in-group FTT row. Without this sweep those rows would
  * leave the mapper with no outcome at all, which silently breaks the batch's
  * row-conservation invariant and makes the row invisible in the review table.
  * Routing the leftovers here keeps that impossible by construction.
@@ -273,7 +297,7 @@ function orphanRole(row: DegiroRow): OrphanRole {
 /** Build a TAX activity for a single FTT (`transactiebelasting`) row. */
 export function buildGroupTaxActivity(row: DegiroRow): ActivityDraft | null {
   const amt = changeAmount(row);
-  if (!amt || !amt.isNegative()) return null; // only paid (negative) FTT
+  if (!amt || amt.isZero()) return null;
   const abs = amt.abs();
   const currency = row.changeCurrency || 'EUR';
   const isin = row.isin;
@@ -283,7 +307,8 @@ export function buildGroupTaxActivity(row: DegiroRow): ActivityDraft | null {
     symbol: isin || row.product || cashSymbol(currency),
     ...(row.product ? { symbolName: row.product } : {}),
     quantity: '1',
-    activityType: 'TAX',
+    activityType: amt.isNegative() ? 'TAX' : 'CREDIT',
+    ...(amt.isPositive() ? { subtype: 'REFUND' as const } : {}),
     unitPrice: abs.toString(),
     currency,
     fee: '0',

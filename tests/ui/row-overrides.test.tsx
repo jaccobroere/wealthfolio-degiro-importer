@@ -92,7 +92,7 @@ describe('review step — in-place row fixes', () => {
 
       // The preview updates before anything is applied.
       await waitFor(() => {
-        expect(screen.getByTestId('row-preview-2').textContent).toContain('Recognized as INTEREST');
+        expect(screen.getByTestId('row-preview-2').textContent).toContain('Recognized as FEE');
       });
 
       await user.click(screen.getByTestId('row-apply-2'));

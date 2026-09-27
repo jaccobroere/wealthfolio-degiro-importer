@@ -9,7 +9,17 @@
 
 /** Wealthfolio activity types emitted by this importer. */
 export type ActivityType =
-  'BUY' | 'SELL' | 'DIVIDEND' | 'TAX' | 'DEPOSIT' | 'WITHDRAWAL' | 'INTEREST' | 'FEE' | 'CREDIT';
+  | 'BUY'
+  | 'SELL'
+  | 'DIVIDEND'
+  | 'TAX'
+  | 'DEPOSIT'
+  | 'WITHDRAWAL'
+  | 'INTEREST'
+  | 'FEE'
+  | 'CREDIT'
+  | 'TRANSFER_IN'
+  | 'TRANSFER_OUT';
 
 export const ACTIVITY_TYPES: readonly ActivityType[] = [
   'BUY',
@@ -21,6 +31,8 @@ export const ACTIVITY_TYPES: readonly ActivityType[] = [
   'INTEREST',
   'FEE',
   'CREDIT',
+  'TRANSFER_IN',
+  'TRANSFER_OUT',
 ];
 
 /**
@@ -62,6 +74,9 @@ export interface GroupProvenance {
  * from authoritative mutation totals.
  */
 export interface ActivityDraft {
+  /** Explicit pair identity for an internal currency conversion. */
+  sourceGroupId?: string;
+  subtype?: 'BONUS' | 'REFUND' | 'INTEREST_CHARGE' | 'COUPON';
   /** ISO 8601 timestamp with Europe/Amsterdam offset. */
   date: string;
   isin?: string;

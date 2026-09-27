@@ -73,9 +73,8 @@ describe('ignoring a row inside an order group', () => {
     expect(buy?.warnings[GROUP_ROW_CHANGED_WARNING]).toBeDefined();
   });
 
-  it('flags the trade when an edited FX row shifts its converted fee', () => {
-    // An FX row is never listed in the trade's sourceRowNumbers, so editing one
-    // changes the fee without the edit warning ever reaching the activity.
+  it('keeps trade fees unchanged when an FX rate is edited', () => {
+    // The rate is provenance, not an instruction to convert the EUR fee.
     const usdCsv = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
 02-01-2026,10:00,02-01-2026,SYNTHETIC EQUITY,US0000000001,"Koop 10 @ 50,00 USD",,USD,"-500,00",USD,"0,00",ord-fx
 02-01-2026,10:00,02-01-2026,SYNTHETIC EQUITY,US0000000001,DEGIRO Transactiekosten en/of kosten van derden,,EUR,"-2,00",EUR,"0,00",ord-fx
@@ -86,7 +85,7 @@ describe('ignoring a row inside an order group', () => {
       3: { kind: 'edit', patch: { fxRaw: '1,5000' } },
     });
     const buy = batch.activities.find((a) => a.activityType === 'BUY');
-    expect(buy?.fee).not.toBe(before?.fee);
+    expect(buy?.fee).toBe(before?.fee);
     expect(buy?.sourceRowNumbers).not.toContain(3);
     expect(buy?.warnings[GROUP_ROW_CHANGED_WARNING]).toBeDefined();
   });
@@ -125,7 +124,7 @@ describe('row conservation survives every override', () => {
     }
   });
 
-  it('accounts for a positive in-group tax row that yields no activity', () => {
+  it('accounts for a positive in-group tax refund as a credit', () => {
     const csv = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
 02-01-2026,10:00,02-01-2026,SYNTHETIC EQUITY,IE00GRP0001,"Koop 10 @ 50,00 EUR",,EUR,"-500,00",EUR,"500,00",ord-1
 02-01-2026,10:00,02-01-2026,SYNTHETIC EQUITY,IE00GRP0001,Transactiebelasting,,EUR,"0,30",EUR,"500,30",ord-1
@@ -133,7 +132,10 @@ describe('row conservation survives every override', () => {
     const { batch } = parseAndMap(csv);
     // Pre-existing hole: a reversal FTT row built no activity and got no skip.
     expect(batch.summary.unaccountedCount).toBe(0);
-    expect(batch.outcomes.find((o) => o.rowIndex === 2)?.kind).toBe('known-skip');
+    expect(batch.outcomes.find((o) => o.rowIndex === 2)?.kind).toBe('group-member');
+    expect(batch.activities.some((a) => a.activityType === 'CREDIT' && a.amount === '0.3')).toBe(
+      true,
+    );
   });
 
   it('keeps every source row accounted for across a sweep of single-row ignores', () => {

@@ -16,6 +16,8 @@
  *    stored with no security at all. One row per new security is therefore
  *    written through `saveMany` (which creates the asset), and the remaining
  *    rows for it are re-checked so they carry the new `assetId`.
+ *    FX cash pairs also use `saveMany`, preserving the explicit pair identity
+ *    absent from the 3.6.1 `ActivityImport` DTO.
  * 5. Submit the checked rows to `activities.import`, Wealthfolio's
  *    import-specific persistence workflow. An instrument row still lacking an
  *    `assetId` is failed instead of imported without its security.
@@ -168,15 +170,25 @@ export async function runImport(
   );
 
   // 4. Partition into new rows and rows already on the account.
+  // Never write one half of a conversion when its companion failed review.
+  // A previously saved companion is different: duplicate matching below lets
+  // a retry complete a partially persisted pair without recreating that leg.
+  const blockedFxGroups = new Set(
+    prepared
+      .filter((p, i) => p.draft.sourceGroupId && !checked[i]?.isValid)
+      .map((p) => p.draft.sourceGroupId!),
+  );
   let accepted: Array<{ prepared: PreparedDraft; checked: ActivityImport }> = [];
   for (let i = 0; i < prepared.length; i++) {
     const p = prepared[i];
     const checkedRow = checked[i];
-    if (!checkedRow?.isValid) {
+    if (!checkedRow?.isValid || blockedFxGroups.has(p.draft.sourceGroupId ?? '')) {
       result.blocked += 1;
       result.failures.push({
         sourceRowNumbers: p.draft.sourceRowNumbers,
-        message: safeHostFailureMessage(checkedRow?.errors),
+        message: p.draft.sourceGroupId
+          ? 'Wealthfolio rejected a currency conversion leg. Both legs must pass review before saving.'
+          : safeHostFailureMessage(checkedRow?.errors),
       });
       continue;
     }
@@ -199,6 +211,9 @@ export async function runImport(
   }
 
   // 5. Seed securities that do not exist in Wealthfolio yet.
+  // FX legs need an explicit sourceGroupId, which ActivityImport cannot carry
+  // in 3.6.1. Persist the reviewed pair through the bulk-create API instead.
+  accepted = await saveFxPairs(api, accountId, accepted, result);
   accepted = await seedMissingAssets(api, accountId, accepted, result);
   const importedFingerprints: string[] = [...result.importedFingerprints];
   const importedSet = new Set<string>(importedFingerprints);
@@ -402,6 +417,61 @@ function needsNewAsset(checked: ActivityImport): boolean {
 }
 
 type AcceptedRow = { prepared: PreparedDraft; checked: ActivityImport };
+
+async function saveFxPairs(
+  api: HostAPI,
+  accountId: string,
+  accepted: AcceptedRow[],
+  result: ImportFlowResult,
+): Promise<AcceptedRow[]> {
+  const pairs = new Map<string, AcceptedRow[]>();
+  for (const row of accepted) {
+    const groupId = row.prepared.draft.sourceGroupId;
+    if (!groupId) continue;
+    const pair = pairs.get(groupId) ?? [];
+    pair.push(row);
+    pairs.set(groupId, pair);
+  }
+  let pairIndex = 0;
+  for (const pair of pairs.values()) {
+    result.attempted += pair.length;
+    const creates = pair.map((row, i) =>
+      toActivityCreate(
+        row.prepared,
+        { ...row.checked, isDraft: false },
+        accountId,
+        `degiro-fx-${pairIndex}-${i}`,
+      ),
+    );
+    pairIndex += 1;
+    try {
+      const saved = await saveCreates(api, creates);
+      const savedFingerprints = buildDuplicateIndex(saved.created).importedFingerprints;
+      for (let i = 0; i < pair.length; i++) {
+        const row = pair[i];
+        if (savedFingerprints.has(row.prepared.fingerprint)) {
+          result.importedFingerprints.push(row.prepared.fingerprint);
+        } else {
+          result.failedFingerprints.push(row.prepared.fingerprint);
+          result.failures.push({
+            sourceRowNumbers: row.prepared.draft.sourceRowNumbers,
+            message:
+              'Wealthfolio could not save this currency conversion leg. Recheck the import before retrying.',
+          });
+        }
+      }
+    } catch (err) {
+      for (const row of pair) {
+        result.failedFingerprints.push(row.prepared.fingerprint);
+        result.failures.push({
+          sourceRowNumbers: row.prepared.draft.sourceRowNumbers,
+          message: safeHostFailureMessage(err, 'activity'),
+        });
+      }
+    }
+  }
+  return accepted.filter((row) => !row.prepared.draft.sourceGroupId);
+}
 
 /**
  * Create every missing security by writing one of its rows through
