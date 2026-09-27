@@ -136,7 +136,7 @@ export function reconcile(batch: BatchOutcome): Reconciliation {
       count: 0,
     };
     roll.totalAbs = roll.totalAbs.plus(amount);
-    roll.net = roll.net.plus(signedAmount);
+    roll.net = roll.net.plus(signedAmount).minus(fee);
     roll.fees = roll.fees.plus(fee);
     roll.taxes = roll.taxes.plus(taxForThis);
     if (a.accruedInterest) {
@@ -188,10 +188,12 @@ function signedAmountFor(a: ActivityDraft, amount: Decimal): Decimal {
     case 'DIVIDEND':
     case 'INTEREST':
     case 'CREDIT':
+    case 'TRANSFER_IN':
       return amount; // cash in
     case 'WITHDRAWAL':
     case 'FEE':
     case 'TAX':
+    case 'TRANSFER_OUT':
       return amount.neg(); // cash out
     case 'BUY':
       return amount.neg(); // cash out for purchase

@@ -23,7 +23,9 @@ export interface DuplicateIndex {
  * Read the metadata of an activity as a record. The host may store metadata
  * as a string or an object; normalize to an object.
  */
-function readMetadata(activity: ActivityDetails): Record<string, unknown> | undefined {
+function readMetadata(
+  activity: Pick<ActivityDetails, 'metadata'>,
+): Record<string, unknown> | undefined {
   const meta = activity.metadata as unknown;
   if (meta == null) return undefined;
   if (typeof meta === 'string') {
@@ -52,7 +54,9 @@ function isOwnedByThisImporter(meta: Record<string, unknown> | undefined): boole
  * considered. Other importers' entries (e.g. `revolut-importer`) are ignored,
  * preserving add-on isolation.
  */
-export function buildDuplicateIndex(activities: ActivityDetails[]): DuplicateIndex {
+export function buildDuplicateIndex(
+  activities: Pick<ActivityDetails, 'metadata'>[],
+): DuplicateIndex {
   const importedFingerprints = new Set<string>();
   const importedOverlapKeys = new Set<string>();
   for (const activity of activities) {

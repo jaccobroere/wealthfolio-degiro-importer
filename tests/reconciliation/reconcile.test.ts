@@ -38,9 +38,9 @@ describe('reconcile', () => {
     ].join('\n');
     const { batch } = parseAndMap(csv);
     const rec = reconcile(batch);
-    expect(rec.knownInternalMovementCount).toBe(2); // cash-sweep + fx-helper
+    expect(rec.knownInternalMovementCount).toBe(1);
     expect(rec.skipReasons['cash-sweep']).toBe(1);
-    expect(rec.skipReasons['fx-helper']).toBe(1);
+    expect(batch.summary.unsupportedCount).toBe(1);
     expect(rec.unaccountedCount).toBe(0);
   });
 });

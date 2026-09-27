@@ -48,7 +48,7 @@ describe('mapOrderGroup', () => {
     expect(result.memberships.some((m) => m.role === 'accrued-interest')).toBe(true);
   });
 
-  it('converts EUR fees to trade currency for USD trades using the FX rate', () => {
+  it('keeps EUR fees on USD trades as separate EUR cash charges', () => {
     const csv = [
       'Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id',
       '02-01-2026,10:00,02-01-2026,SYNTHETIC USD,IE00USD00001,"Koop 10 @ 50 USD",,USD,"-500,00",USD,"0,00",ord-usd-1',
@@ -59,8 +59,12 @@ describe('mapOrderGroup', () => {
     const result = mapOrderGroup(rows, 0);
     const a = result.activities[0];
     expect(a.currency).toBe('USD');
-    // fee 2 EUR * 1.1 = 2.2 USD
-    expect(a.fee).toBe('2.2');
+    expect(a.fee).toBe('0');
+    expect(result.activities[1]).toMatchObject({
+      activityType: 'FEE',
+      currency: 'EUR',
+      amount: '2',
+    });
     expect(a.group?.fxRate).toBe('1.1');
   });
 

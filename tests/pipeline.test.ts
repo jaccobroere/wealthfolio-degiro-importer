@@ -21,15 +21,16 @@ describe('parseAndMap — upstream example fixture (golden)', () => {
     // they become orphan-trade-fee skips.
     expect(batch.summary.byActivityType.SELL).toBe(1);
     expect(batch.summary.byActivityType.DIVIDEND).toBe(1);
-    expect(batch.summary.byActivityType.INTEREST).toBe(1);
+    expect(batch.summary.byActivityType.INTEREST).toBeUndefined();
     expect(batch.summary.byActivityType.DEPOSIT).toBe(2);
-    expect(batch.summary.byActivityType.FEE).toBe(2);
+    expect(batch.summary.byActivityType.FEE).toBe(3);
     expect(batch.summary.byActivityType.TAX).toBe(1);
   });
 
-  it('classifies FX rows and cash sweeps as known-skip', () => {
-    expect(batch.summary.skipReasons['fx-helper']).toBeGreaterThanOrEqual(2);
-    expect(batch.summary.byOutcome['known-skip']).toBeGreaterThan(0);
+  it('imports FX cash pairs instead of skipping them', () => {
+    expect(batch.summary.byActivityType.TRANSFER_IN).toBe(1);
+    expect(batch.summary.byActivityType.TRANSFER_OUT).toBe(1);
+    expect(batch.summary.skipReasons['fx-helper']).toBeUndefined();
   });
 });
 

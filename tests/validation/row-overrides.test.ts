@@ -6,7 +6,7 @@ import type { RowOverrides } from '../../src/domain/row-override';
 /** Row 1 = a clean deposit, row 2 = a description nothing recognizes. */
 const UNSUPPORTED_CSV = `Datum,Tijd,Valutadatum,Product,ISIN,Omschrijving,FX,Mutatie,,Saldo,,Order Id
 02-01-2026,10:00,02-01-2026,,,iDEAL storting,,EUR,"1000,00",EUR,"1000,00",
-02-01-2026,11:00,02-01-2026,SYNTHETIC EQUITY,IE00UNK0001,Onbekende Actie Die Niemand Kent,,EUR,"-42,00",EUR,"958,00",
+02-01-2026,11:00,02-01-2026,SYNTHETIC EQUITY,IE00UNK0001,Onbekende Actie Die Niemand Kent,,EUR,"42,00",EUR,"1042,00",
 `;
 
 /** A row whose amount is not a parseable Dutch decimal → structurally invalid. */
