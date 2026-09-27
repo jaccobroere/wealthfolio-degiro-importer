@@ -3,6 +3,15 @@
 Changes that affect users or maintainers are recorded here. Release-specific
 notes live under [`docs/releases/`](docs/releases/).
 
+## 1.6.1 — 2026-09-27
+
+- Fixed: clearing remembered mappings now waits for every in-flight mapping
+  update, verifies the saved account mapping document, and reports a failure
+  instead of presenting a false successful reset.
+- Fixed: import failures now identify safe host categories such as an
+  unavailable destination account or validation field, without exposing
+  statement values or retrying an ambiguous write.
+
 ## 1.6.0 — 2026-09-26
 
 - Changed: security search is broad (ISIN/ticker, related tickers and names)

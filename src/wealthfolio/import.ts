@@ -528,13 +528,41 @@ function safeHostFailureMessage(error: unknown, scope: 'activity' | 'batch' = 'a
   if (/quote currency/i.test(text)) {
     return 'The selected security has no quote currency. Re-select its mapping.';
   }
+  if (
+    /account.{0,40}(not found|does not exist|missing|invalid)|(?:not found|does not exist|missing) account/i.test(
+      text,
+    )
+  ) {
+    return 'The selected destination account is no longer available. Select it again and retry.';
+  }
   if (/credit card/i.test(text)) {
     return 'The selected destination account does not support these activities.';
   }
   if (/asset-backed|asset_id|symbol/i.test(text)) {
     return 'The security mapping is incomplete. Re-select the instrument.';
   }
+  const fields = validationFields(error);
+  if (fields.length > 0) {
+    return `Wealthfolio rejected this activity during ${fields.join(', ')} validation.`;
+  }
   return scope === 'batch'
-    ? 'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.'
+    ? 'Wealthfolio rejected this batch without a row-level reason. Re-check the destination account and security mappings, then retry.'
     : 'Wealthfolio rejected this activity. Review the destination account and mapping.';
+}
+
+/** Validation field names are safe to render; values are statement-derived and are not. */
+function validationFields(error: unknown): string[] {
+  if (!error || typeof error !== 'object' || Array.isArray(error)) return [];
+  const record = error as Record<string, unknown>;
+  const candidate =
+    record.errors && typeof record.errors === 'object' && !Array.isArray(record.errors)
+      ? (record.errors as Record<string, unknown>)
+      : record;
+  return Object.entries(candidate)
+    .filter(
+      ([, messages]) =>
+        Array.isArray(messages) && messages.every((message) => typeof message === 'string'),
+    )
+    .map(([field]) => field)
+    .sort();
 }
