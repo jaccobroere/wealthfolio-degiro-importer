@@ -6,13 +6,14 @@
  * conversion boundary is `convert-activity.ts`.
  */
 import type { ActivityImport, AssetResolutionInput } from '@wealthfolio/addon-sdk';
+import { version } from '../../package.json';
 
 /** Add-on id as declared in `manifest.json`. Used to isolate this add-on's
  * metadata entries from other importers' entries on the same account. */
 export const IMPORTER_ID = 'degiro-importer';
 
 /** Add-on version, recorded in metadata for forward-compatibility. */
-export const IMPORTER_VERSION = '1.2.0';
+export const IMPORTER_VERSION = version;
 
 /** Source schema version fingerprinted into every activity. */
 export const SOURCE_SCHEMA_VERSION = '1';
