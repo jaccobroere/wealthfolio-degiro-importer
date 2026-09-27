@@ -59,6 +59,7 @@ import {
   withoutSavedMapping,
   type CanonicalIdentity,
 } from '../wealthfolio/symbol-mappings';
+import { MappingPersistence } from '../wealthfolio/mapping-persistence';
 import { broadSearch } from '../wealthfolio/broad-search';
 import {
   DEFAULT_PREFERRED_EXCHANGES,
@@ -91,6 +92,11 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   const [loadingMappings, setLoadingMappings] = useState(false);
   const [acceptingSuggestedMappings, setAcceptingSuggestedMappings] = useState(false);
   const [rebuilding, setRebuilding] = useState(false);
+  const [mappingError, setMappingError] = useState<string | null>(null);
+  const mappingPersistence = useMemo(
+    () => (ctx ? new MappingPersistence(ctx.api, IMPORTER_ID) : null),
+    [ctx],
+  );
 
   // Load accounts on mount.
   useEffect(() => {
@@ -314,15 +320,15 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
   }
 
   function persistMapping(sourceTickerOrIsin: string, identity: CanonicalIdentity): void {
-    if (!ctx || !state.accountId) return;
-    getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
-      .then((existing) => {
-        const updated = withSavedMapping(existing, sourceTickerOrIsin, identity);
+    if (!mappingPersistence || !state.accountId) return;
+    setMappingError(null);
+    void mappingPersistence
+      .update(state.accountId, (mapping) => withSavedMapping(mapping, sourceTickerOrIsin, identity))
+      .then((updated) => {
         setRememberedCount(countSavedMappings(updated));
-        return ctx.api.activities.saveImportMapping(updated);
       })
       .catch(() => {
-        // Non-fatal: mapping not persisted; will need re-confirmation next time.
+        setMappingError('Wealthfolio could not save this mapping. It applies only to this import.');
       });
   }
 
@@ -341,29 +347,23 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
     persistMapping(sourceTickerOrIsin, identity);
   }
 
-  function handleForgetSavedMapping(sourceTickerOrIsin: string): void {
-    if (!ctx || !state.accountId) return;
-
-    // Make the row immediately reviewable even if persistence is temporarily
-    // unavailable. A fresh search is still required before it can proceed.
-    dispatch({
-      type: 'RESOLVE_SYMBOL',
-      sourceTickerOrIsin,
-      resolution: { status: 'pending' },
-    });
-
-    getImportMapping(ctx.api, state.accountId, IMPORTER_ID)
-      .then((existing) => {
-        const updated = withoutSavedMapping(existing, sourceTickerOrIsin);
-        setRememberedCount(countSavedMappings(updated));
-        return ctx.api.activities.saveImportMapping(updated);
-      })
-      .catch(() => {
-        // The stale entry remains only in the host record. It cannot be
-        // auto-applied during this open import because state now requires a
-        // fresh manual confirmation.
-      })
-      .finally(() => handleSearchSymbol(sourceTickerOrIsin));
+  async function handleForgetSavedMapping(sourceTickerOrIsin: string): Promise<void> {
+    if (!mappingPersistence || !state.accountId) return;
+    setMappingError(null);
+    try {
+      const updated = await mappingPersistence.update(state.accountId, (mapping) =>
+        withoutSavedMapping(mapping, sourceTickerOrIsin),
+      );
+      setRememberedCount(countSavedMappings(updated));
+      dispatch({
+        type: 'RESOLVE_SYMBOL',
+        sourceTickerOrIsin,
+        resolution: { status: 'pending' },
+      });
+      handleSearchSymbol(sourceTickerOrIsin);
+    } catch {
+      setMappingError('Wealthfolio could not remove the remembered mapping. Try again.');
+    }
   }
 
   /**
@@ -371,26 +371,38 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
    * Other importers' mappings are kept. All securities return to pending.
    */
   async function handleForgetAllMappings(): Promise<void> {
-    if (!ctx || !state.accountId) return;
-    const existing = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
-    await ctx.api.activities.saveImportMapping(withoutAllSavedMappings(existing));
-    setRememberedCount(0);
-    setRawResults({});
-    const resolutions: Record<string, SymbolResolution> = {};
-    for (const sym of state.instrumentSymbols) resolutions[sym] = { status: 'pending' };
-    dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
+    if (!mappingPersistence || !state.accountId) return;
+    setMappingError(null);
+    try {
+      const verified = await mappingPersistence.updateAndRead(
+        state.accountId,
+        withoutAllSavedMappings,
+      );
+      if (countSavedMappings(verified) !== 0) {
+        setMappingError('Wealthfolio did not clear the remembered mappings. Nothing was reset.');
+        return;
+      }
+      setRememberedCount(0);
+      setRawResults({});
+      const resolutions: Record<string, SymbolResolution> = {};
+      for (const sym of state.instrumentSymbols) resolutions[sym] = { status: 'pending' };
+      dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
+    } catch {
+      setMappingError('Wealthfolio could not clear the remembered mappings. Nothing was reset.');
+    }
   }
 
   /** Save the exchange preference for this account and re-rank results. */
   async function handleSavePreferredExchanges(exchanges: string[]): Promise<void> {
     const next = exchanges.length > 0 ? exchanges : [...DEFAULT_PREFERRED_EXCHANGES];
     setPreferredExchanges(next);
-    if (!ctx || !state.accountId) return;
+    if (!mappingPersistence || !state.accountId) return;
     try {
-      const existing = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
-      await ctx.api.activities.saveImportMapping(withPreferredExchanges(existing, next));
+      await mappingPersistence.update(state.accountId, (mapping) =>
+        withPreferredExchanges(mapping, next),
+      );
     } catch {
-      // Non-fatal: the preference applies to this session.
+      setMappingError('Wealthfolio could not save the preferred exchanges. They apply only here.');
     }
   }
 
@@ -405,14 +417,6 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
 
     setAcceptingSuggestedMappings(true);
     try {
-      let existingMapping: Awaited<ReturnType<typeof getImportMapping>> | null = null;
-      try {
-        existingMapping = await getImportMapping(ctx.api, state.accountId, IMPORTER_ID);
-      } catch {
-        // Resolution remains useful when persistence is temporarily unavailable.
-        // Do not overwrite an unknown mapping document.
-      }
-
       const resolutions = { ...state.symbolResolutions };
       const newlyConfirmed: [string, CanonicalIdentity][] = [];
       const fetched: Record<string, RawSearch> = {};
@@ -450,17 +454,20 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
       setRawResults((prev) => ({ ...prev, ...fetched }));
       dispatch({ type: 'SYMBOL_RESOLUTIONS', resolutions });
 
-      if (existingMapping && newlyConfirmed.length > 0) {
-        const updated = newlyConfirmed.reduce(
-          (mapping, [sourceTickerOrIsin, identity]) =>
-            withSavedMapping(mapping, sourceTickerOrIsin, identity),
-          existingMapping,
-        );
+      if (mappingPersistence && newlyConfirmed.length > 0) {
         try {
-          await ctx.api.activities.saveImportMapping(updated);
+          const updated = await mappingPersistence.update(state.accountId, (mapping) =>
+            newlyConfirmed.reduce(
+              (next, [sourceTickerOrIsin, identity]) =>
+                withSavedMapping(next, sourceTickerOrIsin, identity),
+              mapping,
+            ),
+          );
           setRememberedCount(countSavedMappings(updated));
         } catch {
-          // Non-fatal: accepted mappings stay available for this import.
+          setMappingError(
+            'Wealthfolio could not save the suggested mappings. They apply only to this import.',
+          );
         }
       }
     } finally {
@@ -570,6 +577,7 @@ export function ImporterPage({ ctx }: ImporterPageProps): ReactElement {
           onSavePreferredExchanges={handleSavePreferredExchanges}
           rememberedCount={rememberedCount}
           onForgetAllMappings={handleForgetAllMappings}
+          mappingError={mappingError}
           loadingMappings={loadingMappings}
           acceptingSuggestedMappings={acceptingSuggestedMappings}
           onContinue={() => dispatch({ type: 'GOTO_STEP', step: 'review' })}

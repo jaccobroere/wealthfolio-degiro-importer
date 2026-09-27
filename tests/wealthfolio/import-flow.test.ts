@@ -168,6 +168,19 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(host.storedActivities).toHaveLength(0);
   });
 
+  it('identifies an unavailable destination account without rendering the host error', async () => {
+    const host = createFakeHost({
+      assets: [AAPL],
+      checkImportError: new Error('account not found'),
+    });
+
+    const result = await runImport(host.api, 'acct-1', [buyDraft()]);
+
+    expect(result.fatal).toBe(
+      'The selected destination account is no longer available. Select it again and retry.',
+    );
+  });
+
   it('import-time validation failure returns safe diagnostics without a partial write', async () => {
     const host = createFakeHost({ assets: [AAPL], importValidationErrorCount: 1 });
     const drafts = [buyDraft(), dividendDraft()];
@@ -186,7 +199,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.failures).toEqual([
       {
         sourceRowNumbers: [42],
-        message: 'Wealthfolio rejected this activity. Review the destination account and mapping.',
+        message: 'Wealthfolio rejected this activity during general validation.',
       },
     ]);
     // The fake does not actually store the "valid" row when
@@ -250,7 +263,7 @@ describe('DEGIRO adapter: idempotent import flow', () => {
     expect(result.attempted).toBe(0);
     expect(result.created).toBe(0);
     expect(result.fatal).toBe(
-      'Wealthfolio could not complete this import batch. Re-check the destination account and security mappings, then retry.',
+      'Wealthfolio rejected this batch without a row-level reason. Re-check the destination account and security mappings, then retry.',
     );
     expect(host.importCalls).toHaveLength(0);
   });

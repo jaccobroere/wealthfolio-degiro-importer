@@ -71,6 +71,8 @@ export interface MappingStepProps {
   rememberedCount: number;
   /** Forget every remembered mapping of this add-on for the account. */
   onForgetAllMappings: () => Promise<void>;
+  /** Persistence failure from the host-owned mapping document. */
+  mappingError: string | null;
   /** Whether saved mappings are being loaded. */
   loadingMappings: boolean;
   /** Whether the one-result bulk acceptance is in progress. */
@@ -100,6 +102,7 @@ export function MappingStep(props: MappingStepProps): ReactElement {
     onSavePreferredExchanges,
     rememberedCount,
     onForgetAllMappings,
+    mappingError,
     loadingMappings,
     acceptingSuggestedMappings,
     onContinue,
@@ -138,8 +141,11 @@ export function MappingStep(props: MappingStepProps): ReactElement {
           onSave={onSavePreferredExchanges}
           rememberedCount={rememberedCount}
           onForgetAll={onForgetAllMappings}
+          disabled={acceptingSuggestedMappings}
         />
       ) : null}
+
+      {mappingError ? <p className="text-sm text-destructive">{mappingError}</p> : null}
 
       {accountId && instrumentSymbols.length > 0 ? (
         <div className="space-y-3">
@@ -400,7 +406,7 @@ function SymbolRow({
             variant="ghost"
             size="sm"
             onClick={() => {
-              onForgetSavedMapping();
+              void onForgetSavedMapping();
               setShowResults(true);
             }}
             disabled={searching}
@@ -420,11 +426,13 @@ function MappingSettings({
   onSave,
   rememberedCount,
   onForgetAll,
+  disabled,
 }: {
   preferredExchanges: string[];
   onSave: (exchanges: string[]) => Promise<void>;
   rememberedCount: number;
   onForgetAll: () => Promise<void>;
+  disabled: boolean;
 }): ReactElement {
   const [text, setText] = useState(preferredExchanges.join(', '));
   const [confirming, setConfirming] = useState(false);
@@ -453,7 +461,7 @@ function MappingSettings({
             className="flex-1 h-8 rounded-md border border-input bg-background px-2 text-sm font-mono"
             data-testid="preferred-exchanges"
           />
-          <Button type="submit" variant="outline" size="sm" disabled={!dirty}>
+          <Button type="submit" variant="outline" size="sm" disabled={!dirty || disabled}>
             Save
           </Button>
         </div>
@@ -476,7 +484,7 @@ function MappingSettings({
             <Button
               variant="destructive"
               size="sm"
-              disabled={busy}
+              disabled={busy || disabled}
               onClick={() => {
                 setBusy(true);
                 onForgetAll()
@@ -500,7 +508,7 @@ function MappingSettings({
           <Button
             variant="outline"
             size="sm"
-            disabled={rememberedCount === 0}
+            disabled={rememberedCount === 0 || disabled}
             onClick={() => setConfirming(true)}
             data-testid="forget-all-mappings"
           >
