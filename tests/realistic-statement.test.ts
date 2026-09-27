@@ -48,9 +48,9 @@ describe('realistic statement fixture — conservation', () => {
 
   it('splits the rows into the reviewed outcome families', () => {
     expect(batch.summary.byOutcome).toEqual({
-      activity: 63,
-      'group-member': 57,
-      'known-skip': 80,
+      activity: 87,
+      'group-member': 63,
+      'known-skip': 50,
       unsupported: 0,
       invalid: 0,
     });
@@ -59,7 +59,7 @@ describe('realistic statement fixture — conservation', () => {
 
 describe('realistic statement fixture — activity taxonomy', () => {
   it('produces the exact per-activity-type counts', () => {
-    expect(batch.summary.activityCount).toBe(88);
+    expect(batch.summary.activityCount).toBe(133);
     expect(batch.summary.byActivityType).toEqual({
       BUY: 14,
       SELL: 6,
@@ -68,25 +68,24 @@ describe('realistic statement fixture — activity taxonomy', () => {
       DEPOSIT: 12,
       WITHDRAWAL: 1,
       INTEREST: 17,
-      FEE: 9,
-      CREDIT: 1,
+      FEE: 35,
+      CREDIT: 4,
+      TRANSFER_IN: 8,
+      TRANSFER_OUT: 8,
     });
   });
 
   it('produces the exact known-skip reason counts', () => {
     expect(batch.summary.skipReasons).toEqual({
-      'money-market-fund': 22,
+      'money-market-fund': 3,
       'flatex-internal-transfer': 15,
       'cash-sweep': 13,
-      'fx-helper': 6,
       'zero-amount': 6,
       'reservation-hold': 4,
       'account-interest-bookkeeping': 3,
       'isin-rename': 3,
       'orphan-trade-fee': 2,
-      'positive-reversal': 2,
-      'promotional-credit': 2,
-      'cash-equivalent-coupon': 2,
+      'positive-reversal': 1,
     });
   });
 
@@ -236,8 +235,8 @@ describe('realistic statement fixture — fingerprints', () => {
   it('gives every activity a unique idempotency fingerprint', async () => {
     const result = await parseAndMapWithFingerprints(CONTENT);
     expect(result.hasFingerprintCollision).toBe(false);
-    expect(result.fingerprints.size).toBe(88);
-    expect(new Set(result.fingerprints.values()).size).toBe(88);
+    expect(result.fingerprints.size).toBe(133);
+    expect(new Set(result.fingerprints.values()).size).toBe(133);
   });
 
   it('re-parsing the same statement reproduces identical fingerprints', async () => {

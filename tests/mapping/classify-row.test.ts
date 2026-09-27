@@ -102,14 +102,8 @@ describe('classifyRow', () => {
     expect(
       classifyRow(row({ description: 'Productwijziging : Koop 1 @ 10,00 EUR' })).kind,
     ).toMatchObject({ kind: 'KNOWN_SKIP', reason: 'isin-rename' });
-    expect(classifyRow(row({ description: 'Verrekening welkomstactie' })).kind).toMatchObject({
-      kind: 'KNOWN_SKIP',
-      reason: 'promotional-credit',
-    });
-    expect(classifyRow(row({ description: 'Coupon' })).kind).toMatchObject({
-      kind: 'KNOWN_SKIP',
-      reason: 'cash-equivalent-coupon',
-    });
+    expect(classifyRow(row({ description: 'Verrekening welkomstactie' })).kind).toBe('CREDIT');
+    expect(classifyRow(row({ description: 'Coupon' })).kind).toBe('INTEREST');
     expect(classifyRow(row({ description: 'Rente' })).kind).toMatchObject({
       kind: 'KNOWN_SKIP',
       reason: 'account-interest-bookkeeping',

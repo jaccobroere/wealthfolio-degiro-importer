@@ -58,7 +58,7 @@ describe('previewRowOutcome', () => {
       patch: { description: 'Dividend' },
     });
     expect(edited.tone).toBe('ok');
-    expect(edited.text).toMatch(/DIVIDEND/);
+    expect(edited.text).toMatch(/FEE/);
 
     expect(previewRowOutcome(rows, {}, 2, { kind: 'ignore' }).text).toMatch(/Excluded by you/);
     // The rows themselves are untouched by previewing.

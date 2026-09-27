@@ -59,7 +59,7 @@ describe('DEGIRO importer page', () => {
 
       expect(await screen.findByTestId('parsed-statement-summary')).toBeTruthy();
       expect(screen.getByTestId('parsed-row-count').textContent).toBe('14 rows');
-      expect(screen.getByTestId('parsed-activity-count').textContent).toBe('10 activities');
+      expect(screen.getByTestId('parsed-activity-count').textContent).toBe('12 activities');
       expect(screen.getByTestId('parsed-activity-type-BUY').textContent).toBe('BUY: 1');
       expect(host.saveManyCalls).toHaveLength(0);
       expect(host.savedMapping).toBeUndefined();

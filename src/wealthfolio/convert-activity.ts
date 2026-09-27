@@ -26,7 +26,7 @@ export { IMPORTER_ID, IMPORTER_VERSION, SOURCE_SCHEMA_VERSION, SOURCE_TYPE };
  * Map a pure-core `ActivityType` (DEGIRO subset) to the SDK `ActivityType`.
  *
  * The DEGIRO pure core emits BUY, SELL, DIVIDEND, TAX, DEPOSIT, WITHDRAWAL,
- * INTEREST, FEE, CREDIT — all valid SDK activity types — so this is a 1:1 cast.
+ * INTEREST, FEE, CREDIT, TRANSFER_IN and TRANSFER_OUT — all valid SDK types.
  */
 export function toSdkActivityType(type: ActivityDraft['activityType']): ActivityType {
   return type as ActivityType;
@@ -53,7 +53,7 @@ export function buildMetadata(
     sourceType: SOURCE_TYPE,
     sourceFingerprint: fingerprint,
     sourceRowNumbers: [...draft.sourceRowNumbers].sort((a, b) => a - b),
-    sourceGroupId: draft.group?.orderId,
+    sourceGroupId: draft.sourceGroupId ?? draft.group?.orderId,
     sourceTickerOrIsin,
     resolvedSymbol: resolved?.symbol,
     resolvedMic: resolved?.exchangeMic,
@@ -74,6 +74,7 @@ export function toActivityImport(prepared: PreparedDraft, accountId: string): Ac
   return {
     accountId,
     activityType: toSdkActivityType(draft.activityType),
+    subtype: draft.subtype,
     date: draft.date,
     // The v3.6.1 server's ActivityImport wire model requires a string even
     // for cash-only activities. An empty symbol is its documented cash form;
@@ -141,8 +142,9 @@ export function toActivityCreate(
     id: temporaryId,
     accountId,
     activityType: checked.activityType,
+    subtype: checked.subtype ?? draft.subtype,
     activityDate: checked.date ?? draft.date,
-    sourceGroupId: draft.group?.orderId,
+    sourceGroupId: draft.sourceGroupId ?? draft.group?.orderId,
     asset: resolvedAsset,
     quantity: checked.quantity ?? undefined,
     unitPrice: checked.unitPrice ?? undefined,
@@ -158,6 +160,8 @@ export function toActivityCreate(
     fxRate: checked.fxRate ?? undefined,
     // The SDK permits an object for convenience, but the 3.6.1 host bulk
     // endpoint's wire DTO requires metadata to be a JSON string.
-    metadata: JSON.stringify(meta),
+    metadata: JSON.stringify(
+      draft.sourceGroupId ? { ...meta, flow: { is_external: false } } : meta,
+    ),
   } satisfies ActivityCreate;
 }

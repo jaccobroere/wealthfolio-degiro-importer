@@ -66,18 +66,19 @@ describe('mapStandalone', () => {
     expect(res.reason).toBe('zero-amount');
   });
 
-  it('skips positive tax reversals and maps negative tax', () => {
+  it('maps tax refunds as credits and paid tax as charges', () => {
     expect(
       mapStandalone(row({ description: 'Dividendbelasting', changeAmountRaw: '1,00' })).kind,
-    ).toBe('known-skip');
+    ).toBe('activity');
     const res = mapStandalone(row({ description: 'Dividendbelasting', changeAmountRaw: '-1,00' }));
     expect(res.kind).toBe('activity');
   });
 
-  it('flags negative interest with a warning', () => {
+  it('maps negative interest as a cash charge', () => {
     const res = mapStandalone(row({ description: 'Flatex Interest', changeAmountRaw: '-0,41' }));
     expect(res.kind).toBe('activity');
     if (res.kind !== 'activity') return;
-    expect(res.activity.warnings.amount).toBeDefined();
+    expect(res.activity.activityType).toBe('FEE');
+    expect(res.activity.subtype).toBe('INTEREST_CHARGE');
   });
 });

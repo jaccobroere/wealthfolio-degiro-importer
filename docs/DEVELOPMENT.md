@@ -39,6 +39,31 @@ Both files must exist. Their paths and contents must not be committed or sent
 to CI. This test exercises the parser directly; it does not start a host or
 write imported activities.
 
+The cash truth gate derives expected signs and cash targets directly from the
+local complete-history statement, without a locked monetary baseline:
+
+```sh
+DEGIRO_ACCEPTANCE_CSV=/absolute/path/to/statement.csv \
+pnpm exec vitest run -c vitest.acceptance.config.ts tests/acceptance/degiro-cash.test.ts
+```
+
+For a native cash check, start the **empty disposable** host described below,
+then run:
+
+```sh
+DEGIRO_ACCEPTANCE_CSV=/absolute/path/to/statement.csv \
+pnpm exec tsx scripts/verify-cash-host.ts
+pnpm integration:down
+```
+
+This opt-in check imports the full mapped history, verifies repeat-import
+idempotency, and compares actual host cash holdings at statement precision.
+It refuses a host with any existing accounts and only connects to the fixed
+loopback test port. Manual security identities isolate cash from market-data
+mapping and valuation; this does not test live ticker choices or prices.
+Output is counts and pass/fail flags only. The original CSV is never modified
+or copied. `integration:down` removes the dedicated test database.
+
 ## Host smoke test
 
 `pnpm test:host` packages the current addon, starts an isolated pinned
