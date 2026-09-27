@@ -357,6 +357,7 @@ export function createFakeHost(options: FakeHostOptions = {}): FakeHost {
       _contextKind?: string,
     ): Promise<ImportMappingData> => {
       return (
+        savedMapping ??
         options.importMapping ?? {
           accountId: _accountId,
           fieldMappings: {},
