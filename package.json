@@ -61,7 +61,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@playwright/test": "1.61.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tanstack/react-query": "^5.101.3",
     "@testing-library/dom": "^10.4.1",
